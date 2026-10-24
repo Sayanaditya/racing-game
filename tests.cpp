@@ -743,9 +743,37 @@ void testPhase9_Upgrades() {
         s_game.tick(emptyIn);
     }
     bool transitionedToRacing = (s_game.screenState == ScreenState::Racing);
-    s_game.shutdown();
     checkCond(startedInCountdown && transitionedToRacing,
               "9.e", "Game state machine transitions cleanly from LaunchMenu -> 3-2-1 Countdown -> Racing");
+
+    // 9.f Verify 4 CarSpec presets, Traffic Congestion (Low=8, Med=16, High=24), and Steer Assist toggle
+    s_game.selectCar(1); // Vortex V12 (345 km/h)
+    bool carSpecOk = (getCarSpec(s_game.selectedCar).topSpeedKmh == 345);
+    s_game.selectTrafficDensity(0); // Low (8 cars)
+    int lowCount = s_game.traffic.activeCount;
+    s_game.selectTrafficDensity(1); // Medium (16 cars)
+    int medCount = s_game.traffic.activeCount;
+    s_game.selectTrafficDensity(2); // High (24 cars)
+    int highCount = s_game.traffic.activeCount;
+    s_game.toggleSteerAssist();
+    bool assistToggledOn = s_game.steerAssistOn && s_game.vehicle.steerAssist;
+    s_game.toggleSteerAssist();
+    bool assistToggledOff = !s_game.steerAssistOn && !s_game.vehicle.steerAssist;
+    checkCond(carSpecOk && lowCount == 8 && medCount == 16 && highCount == 24 && assistToggledOn && assistToggledOff,
+              "9.f", "4 Car presets, Traffic Congestion (8/16/24 cars), and Steer Assist ON/OFF toggle verified");
+
+    // 9.g Verify Car Health depletion -> Wrecked state -> On-Spot Repair recovery
+    s_game.vehicle.health = 5.0f;
+    s_game.vehicle.wrecked = true;
+    s_game.tick(emptyIn);
+    bool enteredWrecked = (s_game.screenState == ScreenState::Wrecked);
+    s_game.repairAndContinue();
+    bool repairedOk = (s_game.screenState == ScreenState::Racing) &&
+                      (s_game.vehicle.health == 100.0f) &&
+                      (!s_game.vehicle.wrecked);
+    s_game.shutdown();
+    checkCond(enteredWrecked && repairedOk,
+              "9.g", "Zero Car Health triggers Wrecked state and On-Spot Repair restores 100% Health in place");
 }
 
 } // namespace

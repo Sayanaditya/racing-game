@@ -8,98 +8,61 @@
 
 namespace {
 
-// Compact 5x7 ASCII bitmap font (columns encoded as 7-bit masks, LSB = top row)
+// Compact 5x7 ASCII bitmap font
 const uint8_t FONT_5X7[96][5] = {
-    {0x00,0x00,0x00,0x00,0x00}, // ' '
-    {0x00,0x00,0x5F,0x00,0x00}, // '!'
-    {0x00,0x07,0x00,0x07,0x00}, // '"'
-    {0x14,0x7F,0x14,0x7F,0x14}, // '#'
-    {0x24,0x2A,0x7F,0x2A,0x12}, // '$'
-    {0x23,0x13,0x08,0x64,0x62}, // '%'
-    {0x36,0x49,0x55,0x22,0x50}, // '&'
-    {0x00,0x05,0x03,0x00,0x00}, // '''
-    {0x00,0x1C,0x22,0x41,0x00}, // '('
-    {0x00,0x41,0x22,0x1C,0x00}, // ')'
-    {0x14,0x08,0x3E,0x08,0x14}, // '*'
-    {0x08,0x08,0x3E,0x08,0x08}, // '+'
-    {0x00,0x50,0x30,0x00,0x00}, // ','
-    {0x08,0x08,0x08,0x08,0x08}, // '-'
-    {0x00,0x60,0x60,0x00,0x00}, // '.'
-    {0x20,0x10,0x08,0x04,0x02}, // '/'
-    {0x3E,0x51,0x49,0x45,0x3E}, // '0'
-    {0x00,0x42,0x7F,0x40,0x00}, // '1'
-    {0x42,0x61,0x51,0x49,0x46}, // '2'
-    {0x21,0x41,0x45,0x4B,0x31}, // '3'
-    {0x18,0x14,0x12,0x7F,0x10}, // '4'
-    {0x27,0x45,0x45,0x45,0x39}, // '5'
-    {0x3C,0x4A,0x49,0x49,0x30}, // '6'
-    {0x01,0x71,0x09,0x05,0x03}, // '7'
-    {0x36,0x49,0x49,0x49,0x36}, // '8'
-    {0x06,0x49,0x49,0x29,0x1E}, // '9'
-    {0x00,0x36,0x36,0x00,0x00}, // ':'
-    {0x00,0x56,0x36,0x00,0x00}, // ';'
-    {0x08,0x14,0x22,0x41,0x00}, // '<'
-    {0x14,0x14,0x14,0x14,0x14}, // '='
-    {0x00,0x41,0x22,0x14,0x08}, // '>'
-    {0x02,0x01,0x51,0x09,0x06}, // '?'
-    {0x32,0x49,0x79,0x41,0x3E}, // '@'
-    {0x7E,0x11,0x11,0x11,0x7E}, // 'A'
-    {0x7F,0x49,0x49,0x49,0x36}, // 'B'
-    {0x3E,0x41,0x41,0x41,0x22}, // 'C'
-    {0x7F,0x41,0x41,0x22,0x1C}, // 'D'
-    {0x7F,0x49,0x49,0x49,0x41}, // 'E'
-    {0x7F,0x09,0x09,0x09,0x01}, // 'F'
-    {0x3E,0x41,0x49,0x49,0x7A}, // 'G'
-    {0x7F,0x08,0x08,0x08,0x7F}, // 'H'
-    {0x00,0x41,0x7F,0x41,0x00}, // 'I'
-    {0x20,0x40,0x41,0x3F,0x01}, // 'J'
-    {0x7F,0x08,0x14,0x22,0x41}, // 'K'
-    {0x7F,0x40,0x40,0x40,0x40}, // 'L'
-    {0x7F,0x02,0x0C,0x02,0x7F}, // 'M'
-    {0x7F,0x04,0x08,0x10,0x7F}, // 'N'
-    {0x3E,0x41,0x41,0x41,0x3E}, // 'O'
-    {0x7F,0x09,0x09,0x09,0x06}, // 'P'
-    {0x3E,0x41,0x51,0x21,0x5E}, // 'Q'
-    {0x7F,0x09,0x19,0x29,0x46}, // 'R'
-    {0x46,0x49,0x49,0x49,0x31}, // 'S'
-    {0x01,0x01,0x7F,0x01,0x01}, // 'T'
-    {0x3F,0x40,0x40,0x40,0x3F}, // 'U'
-    {0x1F,0x20,0x40,0x20,0x1F}, // 'V'
-    {0x3F,0x40,0x38,0x40,0x3F}, // 'W'
-    {0x63,0x14,0x08,0x14,0x63}, // 'X'
-    {0x07,0x08,0x70,0x08,0x07}, // 'Y'
-    {0x61,0x51,0x49,0x45,0x43}, // 'Z'
-    {0x00,0x7F,0x41,0x41,0x00}, // '['
-    {0x02,0x04,0x08,0x10,0x20}, // '\'
-    {0x00,0x41,0x41,0x7F,0x00}, // ']'
-    {0x04,0x02,0x01,0x02,0x04}, // '^'
-    {0x40,0x40,0x40,0x40,0x40}, // '_'
+    {0x00,0x00,0x00,0x00,0x00}, {0x00,0x00,0x5F,0x00,0x00}, {0x00,0x07,0x00,0x07,0x00},
+    {0x14,0x7F,0x14,0x7F,0x14}, {0x24,0x2A,0x7F,0x2A,0x12}, {0x23,0x13,0x08,0x64,0x62},
+    {0x36,0x49,0x55,0x22,0x50}, {0x00,0x05,0x03,0x00,0x00}, {0x00,0x1C,0x22,0x41,0x00},
+    {0x00,0x41,0x22,0x1C,0x00}, {0x14,0x08,0x3E,0x08,0x14}, {0x08,0x08,0x3E,0x08,0x08},
+    {0x00,0x50,0x30,0x00,0x00}, {0x08,0x08,0x08,0x08,0x08}, {0x00,0x60,0x60,0x00,0x00},
+    {0x20,0x10,0x08,0x04,0x02}, {0x3E,0x51,0x49,0x45,0x3E}, {0x00,0x42,0x7F,0x40,0x00},
+    {0x42,0x61,0x51,0x49,0x46}, {0x21,0x41,0x45,0x4B,0x31}, {0x18,0x14,0x12,0x7F,0x10},
+    {0x27,0x45,0x45,0x45,0x39}, {0x3C,0x4A,0x49,0x49,0x30}, {0x01,0x71,0x09,0x05,0x03},
+    {0x36,0x49,0x49,0x49,0x36}, {0x06,0x49,0x49,0x29,0x1E}, {0x00,0x36,0x36,0x00,0x00},
+    {0x00,0x56,0x36,0x00,0x00}, {0x08,0x14,0x22,0x41,0x00}, {0x14,0x14,0x14,0x14,0x14},
+    {0x00,0x41,0x22,0x14,0x08}, {0x02,0x01,51,0x09,0x06},   {0x32,0x49,0x79,0x41,0x3E},
+    {0x7E,0x11,0x11,0x11,0x7E}, {0x7F,0x49,0x49,0x49,0x36}, {0x3E,0x41,0x41,0x41,0x22},
+    {0x7F,0x41,0x41,0x22,0x1C}, {0x7F,0x49,0x49,0x49,0x41}, {0x7F,0x09,0x09,0x09,0x01},
+    {0x3E,0x41,0x49,0x49,0x7A}, {0x7F,0x08,0x08,0x08,0x7F}, {0x00,0x41,0x7F,0x41,0x00},
+    {0x20,0x40,0x41,0x3F,0x01}, {0x7F,0x08,0x14,0x22,0x41}, {0x7F,0x40,0x40,0x40,0x40},
+    {0x7F,0x02,0x0C,0x02,0x7F}, {0x7F,0x04,0x08,0x10,0x7F}, {0x3E,0x41,0x41,0x41,0x3E},
+    {0x7F,0x09,0x09,0x09,0x06}, {0x3E,0x41,0x51,0x21,0x5E}, {0x7F,0x09,0x19,0x29,0x46},
+    {0x46,0x49,0x49,0x49,0x31}, {0x01,0x01,0x7F,0x01,0x01}, {0x3F,0x40,0x40,0x40,0x3F},
+    {0x1F,0x20,0x40,0x20,0x1F}, {0x3F,0x40,0x38,0x40,0x3F}, {0x63,0x14,0x08,0x14,0x63},
+    {0x07,0x08,0x70,0x08,0x07}, {0x61,0x51,0x49,0x45,0x43}, {0x00,0x7F,0x41,0x41,0x00},
+    {0x02,0x04,0x08,0x10,0x20}, {0x00,0x41,0x41,0x7F,0x00}, {0x04,0x02,0x01,0x02,0x04},
+    {0x40,0x40,0x40,0x40,0x40}
 };
 
 void buildDialDecal(uint32_t* buf, bool isTach) {
     std::fill(buf, buf + 56 * 56, 0x00000000u);
-    const int cx = 28, cy = 28, rOuter = 26, rInner = 24;
+    const int cx = 28, cy = 28, rOuter = 26, rInner = 23;
     for (int y = 0; y < 56; ++y) {
         for (int x = 0; x < 56; ++x) {
             int dx = x - cx, dy = y - cy;
             int d2 = dx * dx + dy * dy;
             if (d2 <= rOuter * rOuter) {
                 if (d2 >= rInner * rInner) {
-                    buf[y * 56 + x] = (dy < 0) ? RGB(150, 158, 172) : RGB(80, 86, 98);
+                    // Brushed titanium bezel ring with specular top sheen
+                    buf[y * 56 + x] = (dy < -6) ? RGB(185, 195, 212)
+                                    : (dy < 6)  ? RGB(130, 140, 156)
+                                                : RGB(72, 78, 92);
                 } else {
-                    buf[y * 56 + x] = RGB(16, 18, 24);
+                    // Deep carbon-fibre gauge face with subtle concentric ring
+                    bool ring = (d2 >= 15 * 15 && d2 <= 16 * 16);
+                    buf[y * 56 + x] = ring ? RGB(28, 36, 52) : RGB(12, 15, 22);
                 }
             }
         }
     }
-    // Tick marks from 225 deg down to -45 deg
+    // Illuminated tick marks from 225 deg down to -45 deg
     const int numTicks = isTach ? 10 : 13;
     for (int i = 0; i < numTicks; ++i) {
         float frac = static_cast<float>(i) / static_cast<float>(numTicks - 1);
         float deg  = 225.0f - 270.0f * frac;
         float rad  = deg * mathutil::PI / 180.0f;
-        uint32_t col = (isTach && frac >= 0.80f) ? RGB(245, 45, 45) : RGB(220, 228, 240);
-        for (int r = 19; r <= 23; ++r) {
+        uint32_t col = (isTach && frac >= 0.80f) ? RGB(255, 50, 55) : RGB(180, 230, 255);
+        for (int r = 18; r <= 22; ++r) {
             int tx = cx + static_cast<int>(std::lround(static_cast<float>(r) * std::cos(rad)));
             int ty = cy - static_cast<int>(std::lround(static_cast<float>(r) * std::sin(rad)));
             if (tx >= 0 && tx < 56 && ty >= 0 && ty < 56) {
@@ -107,16 +70,16 @@ void buildDialDecal(uint32_t* buf, bool isTach) {
             }
         }
     }
-    // Redline arc on tachometer (7500..9000 RPM => frac 0.833..1.0)
+    // Redline zone on tachometer (7500..9000 RPM)
     if (isTach) {
-        for (int s = 0; s <= 24; ++s) {
-            float frac = 0.833f + (1.0f - 0.833f) * (static_cast<float>(s) / 24.0f);
+        for (int s = 0; s <= 28; ++s) {
+            float frac = 0.82f + (1.0f - 0.82f) * (static_cast<float>(s) / 28.0f);
             float rad  = (225.0f - 270.0f * frac) * mathutil::PI / 180.0f;
-            for (int r = 21; r <= 23; ++r) {
+            for (int r = 20; r <= 22; ++r) {
                 int tx = cx + static_cast<int>(std::lround(static_cast<float>(r) * std::cos(rad)));
                 int ty = cy - static_cast<int>(std::lround(static_cast<float>(r) * std::sin(rad)));
                 if (tx >= 0 && tx < 56 && ty >= 0 && ty < 56) {
-                    buf[ty * 56 + tx] = RGB(235, 35, 35);
+                    buf[ty * 56 + tx] = RGB(250, 40, 45);
                 }
             }
         }
@@ -124,19 +87,9 @@ void buildDialDecal(uint32_t* buf, bool isTach) {
 }
 
 void drawSevenSegDigit(Framebuffer& fb, int x0, int y0, int digit, uint32_t colOn, uint32_t colOff) {
-    // 8x14 px digit
-    // Segments: 0=top, 1=top-left, 2=top-right, 3=mid, 4=bot-left, 5=bot-right, 6=bot
     static const uint8_t MASKS[10] = {
-        0b1110111, // 0
-        0b0100100, // 1
-        0b1011101, // 2
-        0b1101101, // 3
-        0b0101110, // 4
-        0b1101011, // 5
-        0b1111011, // 6
-        0b0100101, // 7
-        0b1111111, // 8
-        0b1101111  // 9
+        0b1110111, 0b0100100, 0b1011101, 0b1101101, 0b0101110,
+        0b1101011, 0b1111011, 0b0100101, 0b1111111, 0b1101111
     };
     uint8_t m = (digit >= 0 && digit <= 9) ? MASKS[digit] : 0;
     auto hSeg = [&](int y, uint8_t bit) {
@@ -204,19 +157,20 @@ void Cockpit::init() {
     st_ = CockpitState{};
 
     const int W = cfg::SCREEN_W;
-    const uint32_t edgeHighlight = RGB(96, 104, 118);
+    const uint32_t edgeHighlight = RGB(105, 118, 138);
 
     auto roofColor = [](int y) -> uint32_t {
-        int v = 22 + y;
-        return RGB(v, v + 2, v + 6);
+        int v = 20 + y;
+        return RGB(v, v + 3, v + 8);
     };
     auto pillarColor = [](int y) -> uint32_t {
-        int v = 30 + (y - 14) / 8;
-        return RGB(v, v + 2, v + 6);
+        int v = 28 + (y - 14) / 7;
+        return RGB(v, v + 3, v + 9);
     };
     auto dashColor = [](int y) -> uint32_t {
-        int v = (y < 192) ? (56 - (y - 176)) : (36 - (y - 192) / 3);
-        v = std::max(18, v);
+        if (y == 192 || y == 193) return RGB(0, 195, 235); // Modern ambient LED accent strip across dashboard
+        int v = (y < 192) ? (52 - (y - 176)) : (34 - (y - 192) / 3);
+        v = std::max(16, v);
         return RGB(v, v + 3, v + 8);
     };
 
@@ -256,12 +210,21 @@ void Cockpit::init() {
     buildDialDecal(tachDecal_, true);
     buildDialDecal(speedDecal_, false);
 
-    // Console decal (80x40 anchored around centre dashboard)
+    // Modern Carbon & Infotainment Centre Console Decal (80x40)
     std::fill(consoleDecal_, consoleDecal_ + 80 * 40, 0x00000000u);
     for (int y = 0; y < 40; ++y) {
         for (int x = 0; x < 80; ++x) {
-            bool border = (x == 0 || x == 79 || y == 0 || y == 39);
-            consoleDecal_[y * 80 + x] = border ? RGB(74, 80, 92) : RGB(20, 24, 30);
+            bool outerBezel = (x <= 1 || x >= 78 || y <= 1 || y >= 38);
+            bool innerScreen = (x >= 16 && x <= 63 && y >= 6 && y <= 28);
+            if (outerBezel) {
+                consoleDecal_[y * 80 + x] = RGB(90, 102, 120);
+            } else if (innerScreen) {
+                consoleDecal_[y * 80 + x] = RGB(10, 16, 24);
+            } else {
+                // Carbon-fibre weave pattern
+                bool weave = ((x + y) & 2) == 0;
+                consoleDecal_[y * 80 + x] = weave ? RGB(26, 30, 38) : RGB(18, 21, 28);
+            }
         }
     }
 }
@@ -343,7 +306,6 @@ void Cockpit::triggerCrack(int impactX, int impactY, uint32_t seed) {
                 }
             }
 
-            // Spawn child ray with probability 0.3
             if (mathutil::rand01(rng) < 0.30f && cracks_.count < 160) {
                 float cDir = dir + ((mathutil::xorshift32(rng) & 1u) ? +0.85f : -0.85f);
                 float cLen = (len - walked) * 0.40f;
@@ -364,7 +326,6 @@ void Cockpit::triggerCrack(int impactX, int impactY, uint32_t seed) {
         }
     }
 
-    // Concentric rings at radii 22, 48, 80
     for (int rIdx = 0; rIdx < 3 && cracks_.count < 160; ++rIdx) {
         int m = ringCount[rIdx];
         for (int i = 0; i < m && cracks_.count < 160; ++i) {
@@ -433,14 +394,41 @@ void Cockpit::drawFrame(Framebuffer& fb) {
         }
     }
 
-    // 3. Keyed decals (tachometer, speedometer, centre console)
+    // 3. Sculpted Side Air Vents on Left & Right Dashboard Wings (rows 198..224)
+    const int ventLX = 12 + ox_, ventRX = 282 + ox_, ventY = 200 + oy_;
+    drawRect(fb, ventLX, ventY, 24, 22, RGB(14, 17, 24));
+    drawRect(fb, ventRX, ventY, 24, 22, RGB(14, 17, 24));
+    for (int s = 0; s < 4; ++s) {
+        int sy = ventY + 3 + s * 5;
+        drawRect(fb, ventLX + 2, sy, 20, 2, RGB(82, 92, 108));
+        drawRect(fb, ventRX + 2, sy, 20, 2, RGB(82, 92, 108));
+    }
+
+    // 4. Keyed decals (tachometer, speedometer, centre console)
     blitUnscaledKeyed(tachDecal_,    56, 56, fb, 70  - 28 + ox_, 214 - 28 + oy_);
     blitUnscaledKeyed(speedDecal_,   56, 56, fb, 250 - 28 + ox_, 214 - 28 + oy_);
     blitUnscaledKeyed(consoleDecal_, 80, 40, fb, 160 - 40 + ox_, 196 + oy_);
 }
 
 void Cockpit::drawGauges(Framebuffer& fb) {
-    // 1. Tachometer needle (centre 70, 214, r = 22, v_max = 9000)
+    // 1. Sequential Shift-Light LED Array along top of centre console (x = 132..188, y = 188)
+    {
+        float rpmFrac = mathutil::clamp((dispRpm_ - 3500.0f) / 4800.0f, 0.0f, 1.0f);
+        int litLeds = static_cast<int>(std::lround(rpmFrac * 8.0f));
+        for (int i = 0; i < 8; ++i) {
+            int lx = 133 + i * 7 + ox_;
+            int ly = 187 + oy_;
+            uint32_t col = RGB(24, 28, 36);
+            if (i < litLeds) {
+                col = (i < 3) ? RGB(40, 245, 110)
+                    : (i < 6) ? RGB(255, 210, 40)
+                              : RGB(255, 40, 50);
+            }
+            drawRect(fb, lx, ly, 5, 3, col);
+        }
+    }
+
+    // 2. Tachometer needle (centre 70, 214, r = 22, v_max = 9000)
     {
         float rpmNorm = mathutil::clamp(dispRpm_ / 9000.0f, 0.0f, 1.0f);
         float rad = (225.0f - 270.0f * rpmNorm) * mathutil::PI / 180.0f;
@@ -448,39 +436,47 @@ void Cockpit::drawGauges(Framebuffer& fb) {
         int tx = cx + static_cast<int>(std::lround(22.0f * std::cos(rad)));
         int ty = cy - static_cast<int>(std::lround(22.0f * std::sin(rad)));
         thickLine(fb, cx, cy, tx, ty, 0, RGB(255, 70, 50));
-        drawRect(fb, cx - 1, cy - 1, 3, 3, RGB(220, 225, 235));
+        drawRect(fb, cx - 2, cy - 2, 5, 5, RGB(220, 225, 235));
     }
 
-    // 2. Speedometer needle (centre 250, 214, r = 22, v_max = 300 km/h)
+    // 3. Speedometer needle (centre 250, 214, r = 22, v_max = 300 km/h)
     {
         float spdNorm = mathutil::clamp(dispSpeed_ / 300.0f, 0.0f, 1.0f);
         float rad = (225.0f - 270.0f * spdNorm) * mathutil::PI / 180.0f;
         int cx = 250 + ox_, cy = 214 + oy_;
         int tx = cx + static_cast<int>(std::lround(22.0f * std::cos(rad)));
         int ty = cy - static_cast<int>(std::lround(22.0f * std::sin(rad)));
-        thickLine(fb, cx, cy, tx, ty, 0, RGB(255, 210, 60));
-        drawRect(fb, cx - 1, cy - 1, 3, 3, RGB(220, 225, 235));
+        thickLine(fb, cx, cy, tx, ty, 0, RGB(0, 235, 255));
+        drawRect(fb, cx - 2, cy - 2, 5, 5, RGB(220, 225, 235));
     }
 
-    // 3. Digital speed readout: 3 seven-segment digits at (141, 206), each 8x14 px
+    // 4. Digital speed readout: 3 seven-segment digits at (141, 206), each 8x14 px
     {
         int spdInt = mathutil::clamp(static_cast<int>(std::lround(dispSpeed_)), 0, 999);
         int d0 = (spdInt / 100) % 10;
         int d1 = (spdInt / 10)  % 10;
         int d2 = spdInt % 10;
-        uint32_t colOn  = (st_.damage > 0.6f) ? RGB(255, 85, 45) : RGB(0, 245, 180);
+        uint32_t colOn  = (st_.damage > 0.6f) ? RGB(255, 85, 45) : RGB(0, 245, 195);
         uint32_t colOff = RGB(14, 34, 32);
         drawSevenSegDigit(fb, 141 + ox_,      206 + oy_, d0, colOn, colOff);
         drawSevenSegDigit(fb, 141 + 10 + ox_, 206 + oy_, d1, colOn, colOff);
         drawSevenSegDigit(fb, 141 + 20 + ox_, 206 + oy_, d2, colOn, colOff);
     }
 
-    // 4. Tilting Steering Wheel (centre 160, 232, rx = 42, ry = 32, 48 rim segments + 3 spokes)
+    // 5. Modern Flat-Bottom GT Steering Wheel + Paddle Shifters + Driver Gloves
     {
         int cx = 160 + ox_;
         int cy = 232 + oy_;
         const float rx = 42.0f, ry = 32.0f;
         float a = dispSteer_ * (100.0f * mathutil::PI / 180.0f);
+
+        // Metallic Paddle Shifters behind left & right spokes
+        for (int side = -1; side <= 1; side += 2) {
+            float pAng = (side < 0) ? (a + mathutil::PI) : a;
+            int px0 = cx + static_cast<int>(std::lround(24.0f * std::cos(pAng)));
+            int py0 = cy + static_cast<int>(std::lround(18.0f * std::sin(pAng)));
+            thickLine(fb, px0, py0 - 8, px0 + side * 4, py0 + 4, 1, RGB(165, 175, 195));
+        }
 
         int px[48], py[48];
         for (int k = 0; k < 48; ++k) {
@@ -489,24 +485,38 @@ void Cockpit::drawGauges(Framebuffer& fb) {
             py[k] = cy + static_cast<int>(std::lround(ry * std::sin(theta)));
         }
 
-        // Three spokes at angles a + {180, 0, 270} deg (i.e. +pi, 0, +1.5*pi)
+        // Brushed aluminium & carbon Y-spokes at angles a + {180, 0, 90} deg
         const float spokeAngles[3] = { a + mathutil::PI, a, a + 0.5f * mathutil::PI };
         for (int s = 0; s < 3; ++s) {
             int sx = cx + static_cast<int>(std::lround((rx - 3.0f) * std::cos(spokeAngles[s])));
             int sy = cy + static_cast<int>(std::lround((ry - 3.0f) * std::sin(spokeAngles[s])));
-            thickLine(fb, cx, cy, sx, sy, 2, RGB(58, 64, 74));
+            thickLine(fb, cx, cy, sx, sy, 2, RGB(78, 86, 102));
+            thickLine(fb, cx, cy, sx, sy, 0, RGB(140, 152, 172));
         }
 
-        // Outer rim (48 segments) + top-centre racing stripe at k = 36 (-90 deg)
+        // Outer rim (48 segments) + Alcantara grips + top-centre racing stripe at k = 36
         for (int k = 0; k < 48; ++k) {
             int kn = (k + 1) % 48;
-            uint32_t col = (k == 35 || k == 36) ? RGB(235, 45, 45) : RGB(24, 28, 34);
+            bool centerStripe = (k == 35 || k == 36);
+            bool sideGrip = (k >= 22 && k <= 26) || (k >= 46 || k <= 2);
+            uint32_t col = centerStripe ? RGB(245, 45, 50)
+                         : sideGrip     ? RGB(44, 50, 62)
+                                        : RGB(22, 26, 32);
             thickLine(fb, px[k], py[k], px[kn], py[kn], 2, col);
         }
 
-        // Steering wheel hub
-        drawRect(fb, cx - 7, cy - 5, 15, 10, RGB(38, 42, 50));
-        drawRect(fb, cx - 2, cy - 2, 5,  4,  RGB(210, 40, 40));
+        // Driver Racing Gloves gripping 9-and-3 positions (k = 24 left, k = 0 right)
+        int gxL = px[24], gyL = py[24];
+        int gxR = px[0],  gyR = py[0];
+        drawRect(fb, gxL - 4, gyL - 4, 9, 8, RGB(32, 36, 46));
+        drawRect(fb, gxL - 3, gyL - 2, 7, 3, RGB(210, 45, 50)); // Red knuckle guard
+        drawRect(fb, gxR - 4, gyR - 4, 9, 8, RGB(32, 36, 46));
+        drawRect(fb, gxR - 3, gyR - 2, 7, 3, RGB(210, 45, 50));
+
+        // Central carbon hub & emblem
+        drawRect(fb, cx - 8, cy - 6, 17, 12, RGB(34, 38, 48));
+        drawRect(fb, cx - 7, cy - 5, 15, 10, RGB(22, 25, 32));
+        drawRect(fb, cx - 2, cy - 2, 5,  4,  RGB(0, 225, 255));
     }
 }
 

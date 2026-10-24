@@ -26,7 +26,7 @@ GameWidget::GameWidget(QWidget* parent)
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
     setMinimumSize(640, 480);
-    setWindowTitle("Argon: Overdrive — First-Person Software-Rasterized 3D Racer (Qt 6)");
+    setWindowTitle("Argon: Overdrive — Modern First-Person Software-Rasterized 3D Racer (Qt 6)");
     resize(1152, 768);
 
     game_.init();
@@ -66,10 +66,8 @@ void GameWidget::updateTargetRect() {
     game_.isFullscreen = isFullScreen();
 
     if (game_.scaleMode == ScaleMode::FullStretch) {
-        // Fill 100% of the window or fullscreen display with zero black borders
         target_ = QRect(0, 0, w, h);
     } else if (game_.scaleMode == ScaleMode::AspectFit) {
-        // Smooth 4:3 aspect-ratio fit touching window edges without integer-floor shrinking
         double sx = static_cast<double>(w) / static_cast<double>(Framebuffer::W);
         double sy = static_cast<double>(h) / static_cast<double>(Framebuffer::H);
         double s  = std::min(sx, sy);
@@ -77,7 +75,6 @@ void GameWidget::updateTargetRect() {
         int th = std::max(1, static_cast<int>(std::lround(Framebuffer::H * s)));
         target_ = QRect((w - tw) / 2, (h - th) / 2, tw, th);
     } else {
-        // Integer multiple scaling
         double sx = static_cast<double>(w) / static_cast<double>(Framebuffer::W);
         double sy = static_cast<double>(h) / static_cast<double>(Framebuffer::H);
         double s  = std::min(sx, sy);
@@ -110,8 +107,8 @@ void GameWidget::paintEvent(QPaintEvent*) {
         p.fillRect(rect(), Qt::black);
         barsDirty_ = false;
     }
-    p.setRenderHint(QPainter::SmoothPixmapTransform, false); // crisp software-rasterized pixels
-    p.drawImage(target_, view_);                             // single Qt draw call per frame
+    p.setRenderHint(QPainter::SmoothPixmapTransform, false);
+    p.drawImage(target_, view_);
 }
 
 void GameWidget::onFrame() {
@@ -181,6 +178,12 @@ void GameWidget::keyPressEvent(QKeyEvent* e) {
             game_.cycleScaleMode();
             updateTargetRect();
             return;
+        case Qt::Key_G:
+            game_.toggleSteerAssist();
+            return;
+        case Qt::Key_T:
+            game_.selectTrafficDensity(game_.selectedDensity + 1);
+            return;
         case Qt::Key_1: game_.setPixelSizePreset(0); return;
         case Qt::Key_2: game_.setPixelSizePreset(1); return;
         case Qt::Key_3: game_.setPixelSizePreset(2); return;
@@ -199,6 +202,26 @@ void GameWidget::keyPressEvent(QKeyEvent* e) {
             return;
         default:
             break;
+    }
+
+    // Wrecked state (Car Health == 0%): [R] or [H] repairs on the spot, [Enter] restarts from grid
+    if (game_.screenState == ScreenState::Wrecked) {
+        switch (e->key()) {
+            case Qt::Key_R:
+            case Qt::Key_H:
+            case Qt::Key_Space:
+                game_.repairAndContinue();
+                return;
+            case Qt::Key_Return:
+            case Qt::Key_Enter:
+                game_.startNewRace();
+                return;
+            case Qt::Key_Escape:
+                game_.enterLaunchMenu();
+                return;
+            default:
+                return;
+        }
     }
 
     // Menu navigation when in LaunchMenu, Paused, or RaceOver
@@ -264,6 +287,12 @@ void GameWidget::keyPressEvent(QKeyEvent* e) {
 
     // In-race hotkeys
     switch (e->key()) {
+        case Qt::Key_H:
+            game_.fieldRepair();
+            return;
+        case Qt::Key_Q:
+            game_.toggleGapGuide();
+            return;
         case Qt::Key_B:
             game_.cycleTheme();
             return;

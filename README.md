@@ -1,63 +1,55 @@
-# Argon: Overdrive — First-Person Software-Rasterized 3D Racer (C++20 / Qt 6)
+# Argon: Overdrive — Modern First-Person Software-Rasterized 3D Racer (C++20 / Qt 6)
 
-A complete CPU software-rasterized first-person pseudo-3D arcade racing game built over C++20 and Qt 6. It implements all 8 phases of the [Implementation Blueprint](Software-Rasterized%20Pseudo-3D%20Racer%20Implementation%20Blueprint%20(C++%20Qt%206).md) plus the full game expansion in [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md).
+A complete CPU software-rasterized first-person pseudo-3D racing game built over C++20 and Qt 6. It implements all 8 phases of the [Implementation Blueprint](Software-Rasterized%20Pseudo-3D%20Racer%20Implementation%20Blueprint%20(C++%20Qt%206).md) plus the v3.0 Modern Realism & Gameplay Overhaul in [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md).
 
-## New Game Features & Architecture Upgrades
+## Modern Realism & Gameplay Features
 
-- **Interactive Launch Screen & Full Game Loop (`game.h/.cpp`)**:
-  - **Attract-Mode 3D Background**: Live autopilot camera flying through the currently selected track on the Launch Screen.
-  - **Interactive Menu**: Keyboard (`W`/`S` or `Up`/`Down`, `A`/`D` or `Left`/`Right`, `Enter`) and mouse hover/click support for selecting Tracks, Game Modes, Pixel Quality, Display Scaling, Fullscreen, and CRT Scanlines.
-  - **Starting Grid Countdown (`3... 2... 1... GO!`)**, **Interactive Pause Menu**, and **Post-Race Results / High-Score Celebration Screen**.
-- **Variable Pixel Size & High-Resolution 960x720 Engine (`framebuffer.h/.cpp`)**:
-  - **Scale3x / EPX Edge-Preserving Upscaler**: Converts the 3D raster canvas to `960x720` with diagonal edge smoothing while rendering HUD text, 2D GPS splines, rally callouts, and menus at native `960x720`.
-  - **5 Live Pixel Size Presets (`1`–`5` or `[` / `]` keys)**:
-    - `1px Ultra HD (960x720)`
-    - `2px High (480x360)`
-    - `3px Classic (320x240)`
-    - `4px Retro (240x180)`
-    - `6px Chunky (160x120)`
-- **Fullscreen & Window Scaling Fix (`gamewidget.h/.cpp`)**:
-  - **Full Window Stretch (Default)**: Expands to 100% of the window or fullscreen display with zero black borders.
-  - **3 Scaling Modes (`L` key)**: `Full Window Stretch`, `4:3 Smooth Aspect Fit`, and `Integer Pixel-Perfect`.
-  - **Instant Fullscreen Toggle (`F` or `F11` key, or Menu)**: Switches cleanly between fullscreen and windowed mode.
-- **2D GPS Navigation System & Rally Callouts (`track.h/.cpp`, `game.cpp`)**:
-  - **Dual-Mode 2D GPS (`Tab` key)**: Rotating player-centric radar (where "Up" matches your current heading) + Full Circuit Overview map, with upcoming road segments colour-coded by turn severity (Green = Straight, Yellow = Medium Bend, Red = Sharp Hairpin), checkpoint markers, and live rival car blips.
-  - **Turn-by-Turn Rally Callouts**: Scans 55 segments ahead to display directional warnings (`< EASY LEFT`, `>> MEDIUM RIGHT`, `<<< HARD LEFT!`, `/\ BLIND CREST AHEAD`).
-- **5 Distinct Racing Circuits & Biomes (`track.cpp`, `roadrender.cpp`)**:
-  1. **Emerald Coast** (*Classic Daylight* — sweeping coastal highway, normal difficulty)
-  2. **Neon Mirage** (*Synthwave Sunset* — high-speed sunset freeway, long nitro straights)
-  3. **Cyber Tokyo** (*Midnight Expressway* — tight night chicanes, rain weather)
-  4. **Alpine Glacier** (*Snowy Mountain Switchbacks* — steep climbs, blind crests, snow weather)
-  5. **Crimson Canyon** (*Desert Endurance Gauntlet* — extreme canyon drops and high-speed rivals)
-- **Persistent High Scores & Best Lap Records (`highscores.h/.cpp`)**:
-  - Automatically loads and saves per-track High Scores, Best Lap Times, Top Speeds, and Overtake records to `highscores.dat`.
-  - Live `SCORE`, `HI-SCORE`, Overtake Combo Multiplier (`1X`–`8X`), and 3D overhead Checkpoint & Start/Finish arches.
+- **Realistic Physical Bump Collisions & AR Passing-Gap Guides (`collision.cpp`, `vehicle.cpp`, `game.cpp`)**:
+  - **Fair Lane-Splitting Clearance**: Refined gameplay hitboxes allow realistic lane splitting between adjacent traffic cars.
+  - **Physical Bump & Momentum Transfer**: Traffic and scenery impacts apply lateral rebound impulses, speed scrubbing, and proportional **Car Health damage** instead of interrupting the race with a cutscene on every bump.
+  - **3D AR Bumper Trajectory Rails & Target Brackets (`Q` toggle)**: Projects your car's exact bumper width onto the road ahead (`Green` = Clear Corridor, `Cyan` = Slipstream Drafting, `Amber` = Tight Squeeze, `Red` = Blocked + `<< PASS LEFT / PASS RIGHT >>` indicator above the obstacle).
+- **Car Health (`0%`–`100%`), Pit Repair & On-Spot Wreck Recovery (`vehicle.cpp`, `game.cpp`)**:
+  - **Live Health Bar**: Displayed on the left digital cockpit screen, top HUD, and repair banners.
+  - **Checkpoint & Field Repair**: Passing through Checkpoint Arches restores `+25%` Health; pressing `H` performs an instant **Field Repair** (`+50%` Health).
+  - **Zero-Health Wrecked State**: If Health reaches `0%`, the car stalls and lets you choose between **`[R]` / `[H]` On-Spot Repair & Continue** right where you stopped or **`[Enter]` Restart from Grid**.
+- **4 Selectable Supercar Options (`vehicle.h/.cpp`)**:
+  1. **`APEX GT-R`** (*Balanced Twin-Turbo Coupe* — `300 km/h`, `100%` Armor, `100%` Grip, Cyan Accent)
+  2. **`VORTEX V12`** (*Hypercar Interceptor* — `345 km/h`, `124%` Accel, `85%` Armor, Crimson Accent)
+  3. **`DRIFT SPEC-R`** (*Touge Track Special* — `288 km/h`, `128%` Grip, `95%` Armor, Amber Accent)
+  4. **`TITAN ENFORCER`** (*Armored Endurance GT* — `294 km/h`, `155%` Armor, `102%` Grip, Emerald Accent)
+- **Traffic Congestion Selector (`T` key or Menu)**:
+  - **`LOW (8 Cars)`**, **`MEDIUM (16 Cars)`**, and **`HIGH / RUSH HOUR (24 Cars)`**.
+- **Toggleable Steering / Cornering Assist (`G` key or Menu)**:
+  - **`OFF (Manual Realism — Default)`**: Curves apply full centrifugal push outward with zero automatic turning.
+  - **`ON (ADAS Apex/Lane Assist)`**: Gently assists steering into corners and stabilizes lane position.
+- **Detailed Modern First-Person Cockpit (`cockpit.cpp`, `game.cpp`)**:
+  - Carbon-weave centre console, sequential 8-LED RPM shift-light array, sculpted side air vents, ambient LED dash strip matching your selected car, left blind-spot wing mirror (`! CAR NEAR !`), panoramic top rear-view mirror, and a flat-bottom GT steering wheel with rotating metallic paddle shifters and driver racing gloves.
+- **5 Racing Tracks, 2D GPS Radar & Variable Pixel Size (`1px` `960x720` to `6px` `160x120`)**:
+  - Switch pixel granularity live with `1`–`5` or `[` / `]`, toggle fullscreen with `F` / `F11`, and cycle scaling modes with `L`.
 
 ## Controls
 
 | Key / Input | Action |
 | --- | --- |
 | `W` / `Up`, `S` / `Down`, `A` / `Left`, `D` / `Right` | Throttle, Brake, Steer Left/Right (or Navigate Menus) |
-| `Enter` / `Space` / `Left Click` | Confirm Menu Option / Activate Nitro Boost in Race |
-| `1` / `2` / `3` / `4` / `5` or `[` / `]` | Change Pixel Size / Visual Quality (`1px` Ultra `960x720` to `6px` Chunky) |
-| `F` / `F11` | Toggle Fullscreen Mode |
-| `L` | Cycle Display Scaling (`Full Window Stretch` / `4:3 Aspect Fit` / `Integer`) |
-| `Tab` | Cycle GPS Navigation Mode (`Rotating Radar` / `Full Circuit Map` / `Off`) |
-| `B` / `V` / `X` / `C` | Cycle Biome (`B`), Rear-View Mirror (`V`), Wipers (`X`), Weather (`C`) |
-| `M` / `N` / `P` / `R` / `F3` | Mute (`M`), Music (`N`), Pause Menu (`P`), Restart (`R`), Profiler (`F3`) |
+| `Space` / `Shift` | Activate Nitro Boost (or Confirm Menu Selection) |
+| `H` / `R` | Field Repair (`+50%` Health) / On-Spot Full Repair when Wrecked |
+| `G` | Toggle Steering Assist (`ADAS ON` vs `Manual OFF`) |
+| `T` | Cycle Traffic Congestion (`Low 8` / `Medium 16` / `High 24`) |
+| `Q` | Toggle 3D AR Passing-Gap Trajectory Rails & Target Brackets |
+| `1` – `5` or `[` / `]` | Change Pixel Size / Quality (`1px` Ultra `960x720` to `6px` Chunky) |
+| `F` / `F11` & `L` | Toggle Fullscreen (`F`/`F11`) & Cycle Display Scaling (`L`) |
+| `Tab` / `B` / `V` / `X` / `C` | GPS Mode (`Tab`), Biome (`B`), Mirror (`V`), Wipers (`X`), Weather (`C`) |
+| `M` / `N` / `P` / `F3` / `Esc` | Mute (`M`), Music (`N`), Pause (`P`), Profiler (`F3`), Menu (`Esc`) |
 
 ## Building & Running
 
-### 1. Build Qt 6 Application (CMake)
-
 ```bash
+# Build Qt 6 Application via CMake
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ./build/racer
-```
 
-### 2. Run Automated Verification Suite (CLI)
-
-```bash
+# Or run the 49-check Automated Verification Suite
 make test
 ```

@@ -22,13 +22,18 @@ const char* MODE_NAMES[3] = {
     "GRAND PRIX (3 LAPS)",
     "ENDLESS FREE RUN"
 };
+const char* DENSITY_NAMES[3] = {
+    "LOW (8 CARS - OPEN)",
+    "MEDIUM (16 CARS)",
+    "HIGH (24 CARS - RUSH)"
+};
 const char* SCALE_NAMES[3] = {
     "FULL WINDOW STRETCH",
     "4:3 ASPECT FIT",
     "INTEGER PIXEL-PERFECT"
 };
-inline constexpr int LAUNCH_MENU_ITEMS = 8;
-inline constexpr int PAUSE_MENU_ITEMS  = 5;
+inline constexpr int LAUNCH_MENU_ITEMS = 10;
+inline constexpr int PAUSE_MENU_ITEMS  = 7;
 } // namespace
 
 void Game::init(int workerCount, bool forceScalar) {
@@ -39,11 +44,18 @@ void Game::init(int workerCount, bool forceScalar) {
     highScores.init("highscores.dat");
     buildSpriteAtlas(atlas);
 
-    selectedTrack = 0;
+    selectedTrack   = 0;
+    selectedCar     = 0;
+    selectedDensity = 1; // Medium traffic congestion by default in interactive mode
+    steerAssistOn   = false;
+    showGapGuide    = true;
+
     buildDemoTrack(track);
     initRenderContext(ctx, 0);
     cockpit.init();
     camFx = CameraFx{};
+    vehicle = Vehicle{};
+    traffic.density = TrafficDensity::High;
     VehiclePhysics::reset(vehicle, track, traffic);
     VehiclePhysics::fillCamera(vehicle, track, camFx, cam);
     scheduler.init(workerCount);
@@ -69,6 +81,7 @@ void Game::init(int workerCount, bool forceScalar) {
     raceMaxSpeedKmh = 0.0f;
     racePosition    = 25;
     lastCheckpointSeg = 0;
+    lastNearMisses  = 0;
     newHighScoreAchieved = false;
     newBestLapAchieved   = false;
     bannerTimer     = 0.0f;
@@ -83,7 +96,40 @@ void Game::enterLaunchMenu() {
     screenState = ScreenState::LaunchMenu;
     paused      = false;
     menuCursor  = 0;
+    vehicle.realisticMode = true;
+    vehicle.carPreset     = selectedCar;
+    vehicle.steerAssist   = steerAssistOn;
+    traffic.density       = static_cast<TrafficDensity>(selectedDensity);
     selectTrack(selectedTrack);
+}
+
+void Game::selectCar(int carIdx) {
+    selectedCar = ((carIdx % NUM_CAR_PRESETS) + NUM_CAR_PRESETS) % NUM_CAR_PRESETS;
+    vehicle.carPreset = selectedCar;
+    const CarSpec& spec = getCarSpec(selectedCar);
+    char msg[48];
+    std::snprintf(msg, sizeof(msg), "CAR: %s (%d KM/H)", spec.name, spec.topSpeedKmh);
+    triggerBanner(msg, spec.accentColor, 1.8f);
+}
+
+void Game::selectTrafficDensity(int densityIdx) {
+    selectedDensity = ((densityIdx % 3) + 3) % 3;
+    traffic.density = static_cast<TrafficDensity>(selectedDensity);
+    const TrackMetadata& meta = getTrackMetadata(selectedTrack);
+    initTraffic(traffic, track, 1u, traffic.density);
+    for (int i = 0; i < cfg::MAX_TRAFFIC; ++i) {
+        traffic.cars[i].speed *= meta.trafficSpeedMult;
+    }
+    char msg[48];
+    std::snprintf(msg, sizeof(msg), "TRAFFIC: %s", DENSITY_NAMES[selectedDensity]);
+    triggerBanner(msg, RGB(255, 215, 70), 1.8f);
+}
+
+void Game::toggleSteerAssist() {
+    steerAssistOn = !steerAssistOn;
+    vehicle.steerAssist = steerAssistOn;
+    triggerBanner(steerAssistOn ? "STEER ASSIST (ADAS): ON" : "STEER ASSIST: OFF (MANUAL)",
+                  steerAssistOn ? RGB(80, 255, 150) : RGB(255, 190, 60), 1.8f);
 }
 
 void Game::selectTrack(int presetIdx) {
@@ -93,6 +139,12 @@ void Game::selectTrack(int presetIdx) {
     initRenderContext(ctx, meta.defaultTheme);
     weatherMode = meta.defaultWeather;
     wipersOn    = (weatherMode != 0);
+
+    vehicle.realisticMode = !testMode;
+    vehicle.carPreset     = selectedCar;
+    vehicle.steerAssist   = steerAssistOn;
+    traffic.density       = static_cast<TrafficDensity>(selectedDensity);
+
     VehiclePhysics::reset(vehicle, track, traffic);
     for (int i = 0; i < cfg::MAX_TRAFFIC; ++i) {
         traffic.cars[i].speed *= meta.trafficSpeedMult;
@@ -108,16 +160,42 @@ void Game::startNewRace() {
     scoreAccum      = 0.0f;
     comboMult       = 1;
     comboTimer      = 0.0f;
-    timeLeftSec     = (gameMode == GameMode::ArcadeCheckpoint) ? 45.0f : 999.0f;
+    timeLeftSec     = (gameMode == GameMode::ArcadeCheckpoint) ? 50.0f : 999.0f;
     countdownTimer  = 3.2f;
     raceMaxSpeedKmh = 0.0f;
-    racePosition    = 25;
+    racePosition    = traffic.activeCount + 1;
     lastCheckpointSeg = 0;
+    lastNearMisses  = 0;
     newHighScoreAchieved = false;
     newBestLapAchieved   = false;
     paused          = false;
     screenState     = ScreenState::Countdown;
     triggerBanner("GET READY!", RGB(255, 220, 60), 2.0f);
+}
+
+void Game::repairAndContinue() {
+    VehiclePhysics::repairInPlace(vehicle, &cockpit);
+    if (screenState == ScreenState::Wrecked) {
+        screenState = ScreenState::Racing;
+    }
+    paused = false;
+    triggerBanner("VEHICLE REPAIRED (100% HEALTH)!", RGB(60, 255, 140), 2.2f);
+    vehicle.audio.shiftCount++;
+}
+
+void Game::fieldRepair() {
+    if (vehicle.wrecked || screenState == ScreenState::Wrecked) {
+        repairAndContinue();
+        return;
+    }
+    if (vehicle.health < 99.0f) {
+        vehicle.health        = std::min(100.0f, vehicle.health + 50.0f);
+        vehicle.damage        = 1.0f - (vehicle.health / 100.0f);
+        vehicle.crackProgress = vehicle.damage;
+        if (vehicle.health >= 99.0f) cockpit.clearCracks();
+        triggerBanner("FIELD REPAIR +50% HEALTH!", RGB(80, 255, 160), 1.8f);
+        vehicle.audio.shiftCount++;
+    }
 }
 
 void Game::setPixelSizePreset(int presetIdx) {
@@ -171,36 +249,26 @@ void Game::menuAdjust(int dir, bool& outToggleFullscreen, bool& outQuit) {
     outQuit = false;
     if (screenState == ScreenState::LaunchMenu) {
         switch (menuCursor) {
-            case 0: // START RACE
-                if (dir > 0) startNewRace();
-                break;
-            case 1: // TRACK
-                selectTrack(selectedTrack + dir);
-                break;
-            case 2: // GAME MODE
-                gameMode = static_cast<GameMode>(((static_cast<int>(gameMode) + dir) % 3 + 3) % 3);
-                break;
-            case 3: // PIXEL SIZE
-                setPixelSizePreset(pixelSizeIdx + dir);
-                break;
-            case 4: // DISPLAY SCALING
-                scaleMode = static_cast<ScaleMode>(((static_cast<int>(scaleMode) + dir) % 3 + 3) % 3);
-                break;
-            case 5: // FULLSCREEN
-                outToggleFullscreen = true;
-                break;
-            case 6: // CRT SCANLINES
-                crtScanlines = !crtScanlines;
-                break;
-            case 7: // QUIT
-                break;
+            case 0: if (dir > 0) startNewRace(); break;
+            case 1: selectCar(selectedCar + dir); break;
+            case 2: selectTrack(selectedTrack + dir); break;
+            case 3: selectTrafficDensity(selectedDensity + dir); break;
+            case 4: toggleSteerAssist(); break;
+            case 5: gameMode = static_cast<GameMode>(((static_cast<int>(gameMode) + dir) % 3 + 3) % 3); break;
+            case 6: setPixelSizePreset(pixelSizeIdx + dir); break;
+            case 7: scaleMode = static_cast<ScaleMode>(((static_cast<int>(scaleMode) + dir) % 3 + 3) % 3); break;
+            case 8: outToggleFullscreen = true; break;
+            case 9: break;
         }
         vehicle.audio.shiftCount++;
     } else if (screenState == ScreenState::Paused) {
-        if (pauseCursor == 2) {
-            setPixelSizePreset(pixelSizeIdx + dir);
-            vehicle.audio.shiftCount++;
+        switch (pauseCursor) {
+            case 2: toggleSteerAssist(); break;
+            case 3: selectTrafficDensity(selectedDensity + dir); break;
+            case 4: setPixelSizePreset(pixelSizeIdx + dir); break;
+            default: break;
         }
+        vehicle.audio.shiftCount++;
     }
 }
 
@@ -210,24 +278,30 @@ void Game::menuActivate(bool& outToggleFullscreen, bool& outQuit) {
     if (screenState == ScreenState::LaunchMenu) {
         switch (menuCursor) {
             case 0: startNewRace(); break;
-            case 1: selectTrack(selectedTrack + 1); break;
-            case 2: gameMode = static_cast<GameMode>((static_cast<int>(gameMode) + 1) % 3); break;
-            case 3: setPixelSizePreset(pixelSizeIdx + 1); break;
-            case 4: cycleScaleMode(); break;
-            case 5: outToggleFullscreen = true; break;
-            case 6: crtScanlines = !crtScanlines; break;
-            case 7: outQuit = true; break;
+            case 1: selectCar(selectedCar + 1); break;
+            case 2: selectTrack(selectedTrack + 1); break;
+            case 3: selectTrafficDensity(selectedDensity + 1); break;
+            case 4: toggleSteerAssist(); break;
+            case 5: gameMode = static_cast<GameMode>((static_cast<int>(gameMode) + 1) % 3); break;
+            case 6: setPixelSizePreset(pixelSizeIdx + 1); break;
+            case 7: cycleScaleMode(); break;
+            case 8: outToggleFullscreen = true; break;
+            case 9: outQuit = true; break;
         }
         vehicle.audio.shiftCount++;
     } else if (screenState == ScreenState::Paused) {
         switch (pauseCursor) {
             case 0: togglePause(); break;
-            case 1: startNewRace(); break;
-            case 2: setPixelSizePreset(pixelSizeIdx + 1); break;
-            case 3: outToggleFullscreen = true; break;
-            case 4: enterLaunchMenu(); break;
+            case 1: repairAndContinue(); break;
+            case 2: toggleSteerAssist(); break;
+            case 3: selectTrafficDensity(selectedDensity + 1); break;
+            case 4: setPixelSizePreset(pixelSizeIdx + 1); break;
+            case 5: outToggleFullscreen = true; break;
+            case 6: enterLaunchMenu(); break;
         }
         vehicle.audio.shiftCount++;
+    } else if (screenState == ScreenState::Wrecked) {
+        repairAndContinue();
     } else if (screenState == ScreenState::RaceOver) {
         enterLaunchMenu();
     }
@@ -235,13 +309,13 @@ void Game::menuActivate(bool& outToggleFullscreen, bool& outQuit) {
 
 void Game::handleMouseMove(int normX960, int normY720) {
     if (screenState == ScreenState::LaunchMenu) {
-        if (normX960 >= 50 && normX960 <= 500 && normY720 >= 230 && normY720 < 230 + LAUNCH_MENU_ITEMS * 48) {
-            int idx = (normY720 - 230) / 48;
+        if (normX960 >= 45 && normX960 <= 510 && normY720 >= 224 && normY720 < 224 + LAUNCH_MENU_ITEMS * 41) {
+            int idx = (normY720 - 224) / 41;
             if (idx >= 0 && idx < LAUNCH_MENU_ITEMS) menuCursor = idx;
         }
     } else if (screenState == ScreenState::Paused) {
-        if (normX960 >= 280 && normX960 <= 680 && normY720 >= 250 && normY720 < 250 + PAUSE_MENU_ITEMS * 46) {
-            int idx = (normY720 - 250) / 46;
+        if (normX960 >= 260 && normX960 <= 700 && normY720 >= 230 && normY720 < 230 + PAUSE_MENU_ITEMS * 42) {
+            int idx = (normY720 - 230) / 42;
             if (idx >= 0 && idx < PAUSE_MENU_ITEMS) pauseCursor = idx;
         }
     }
@@ -250,13 +324,15 @@ void Game::handleMouseMove(int normX960, int normY720) {
 void Game::handleMouseClick(int normX960, int normY720, bool& outToggleFullscreen, bool& outQuit) {
     handleMouseMove(normX960, normY720);
     if (screenState == ScreenState::LaunchMenu) {
-        if (normX960 >= 50 && normX960 <= 500 && normY720 >= 230 && normY720 < 230 + LAUNCH_MENU_ITEMS * 48) {
+        if (normX960 >= 45 && normX960 <= 510 && normY720 >= 224 && normY720 < 224 + LAUNCH_MENU_ITEMS * 41) {
             menuActivate(outToggleFullscreen, outQuit);
         }
     } else if (screenState == ScreenState::Paused) {
-        if (normX960 >= 280 && normX960 <= 680 && normY720 >= 250 && normY720 < 250 + PAUSE_MENU_ITEMS * 46) {
+        if (normX960 >= 260 && normX960 <= 700 && normY720 >= 230 && normY720 < 230 + PAUSE_MENU_ITEMS * 42) {
             menuActivate(outToggleFullscreen, outQuit);
         }
+    } else if (screenState == ScreenState::Wrecked) {
+        repairAndContinue();
     } else if (screenState == ScreenState::RaceOver) {
         enterLaunchMenu();
     }
@@ -267,6 +343,8 @@ void Game::tick(const InputState& in) {
 
     // Unit test mode runs pure Phase 1-8 physics tick without menu state interception
     if (testMode) {
+        vehicle.realisticMode = false;
+        vehicle.hitboxScale   = 1.0f;
         if (in.justPressed(InputState::PAUSE)) paused = !paused;
         if (in.justPressed(InputState::RESET)) {
             VehiclePhysics::reset(vehicle, track, traffic);
@@ -288,6 +366,9 @@ void Game::tick(const InputState& in) {
         return;
     }
 
+    vehicle.realisticMode = true;
+    vehicle.hitboxScale   = 0.64f;
+
     if (bannerTimer > 0.0f) {
         bannerTimer = std::max(0.0f, bannerTimer - cfg::STEP);
     }
@@ -300,10 +381,10 @@ void Game::tick(const InputState& in) {
             ? (static_cast<int>(std::floor(mathutil::wrap(vehicle.z, track.length) / cfg::SEG_LEN)) % track.count)
             : 0;
         float c = track.segs[segIdx].curve;
-        if (c > 0.2f || vehicle.x < -0.25f) autoIn.down |= InputState::RIGHT;
-        if (c < -0.2f || vehicle.x > +0.25f) autoIn.down |= InputState::LEFT;
+        if (c > 0.15f || vehicle.x < -0.20f) autoIn.down |= InputState::RIGHT;
+        if (c < -0.15f || vehicle.x > +0.20f) autoIn.down |= InputState::LEFT;
 
-        vehicle.invulnT = 2.0f; // immune during attract-mode flythrough
+        vehicle.invulnT = 2.0f;
         VehiclePhysics::tick(vehicle, autoIn, track, atlas, traffic, &camFx, &cockpit);
         vehicle.speed = std::min(vehicle.speed, 0.55f * cfg::MAX_SPEED);
         vehicle.audio.rpm = 1400.0f;
@@ -325,7 +406,7 @@ void Game::tick(const InputState& in) {
             vehicle.audio.shiftCount++;
         }
         bool revThrottle = in.has(InputState::ACCEL);
-        vehicle.rpm = mathutil::lerp(vehicle.rpm, revThrottle ? 5800.0f : 1200.0f, 0.15f);
+        vehicle.rpm = mathutil::lerp(vehicle.rpm, revThrottle ? 6200.0f : 1200.0f, 0.15f);
         vehicle.audio.rpm = vehicle.rpm;
         vehicle.audio.throttle = revThrottle ? 0.6f : 0.0f;
         camFx.update(0.0f, (vehicle.rpm - 900.0f) / 7600.0f, 0.0f, 0.0f);
@@ -345,11 +426,10 @@ void Game::tick(const InputState& in) {
         return;
     }
 
-    // 3. Race Over state
-    if (screenState == ScreenState::RaceOver) {
+    // 3. Wrecked (Health == 0) or Race Over states
+    if (screenState == ScreenState::Wrecked || screenState == ScreenState::RaceOver) {
         InputState coastIn;
         coastIn.down = InputState::BRAKE;
-        vehicle.invulnT = 2.0f;
         VehiclePhysics::tick(vehicle, coastIn, track, atlas, traffic, &camFx, &cockpit);
         VehiclePhysics::fillCamera(vehicle, track, camFx, cam);
         tickCount++;
@@ -363,7 +443,11 @@ void Game::tick(const InputState& in) {
         togglePause();
     }
     if (in.justPressed(InputState::RESET)) {
-        startNewRace();
+        if (vehicle.health < 100.0f) {
+            repairAndContinue();
+        } else {
+            startNewRace();
+        }
     }
     if (in.justPressed(InputState::WIPER)) {
         wipersOn = !wipersOn;
@@ -372,7 +456,7 @@ void Game::tick(const InputState& in) {
     if (!paused && screenState == ScreenState::Racing) {
         int prevOvertakes = vehicle.overtakes;
         int prevLap       = vehicle.lap;
-        uint32_t prevCrashes = vehicle.audio.crashCount;
+        float prevHealth  = vehicle.health;
 
         VehiclePhysics::tick(vehicle, in, track, atlas, traffic, &camFx, &cockpit);
         VehiclePhysics::fillCamera(vehicle, track, camFx, cam);
@@ -380,24 +464,44 @@ void Game::tick(const InputState& in) {
         float spdKmh = vehicle.speed * cfg::KMH_PER_WU;
         raceMaxSpeedKmh = std::max(raceMaxSpeedKmh, spdKmh);
 
-        // Reset combo on crash
-        if (vehicle.audio.crashCount > prevCrashes) {
-            comboMult  = 1;
-            comboTimer = 0.0f;
-            triggerBanner("CRASH! COMBO LOST", RGB(255, 70, 70), 1.8f);
+        // Transition to Wrecked screen when Car Health hits 0%
+        if (vehicle.wrecked || vehicle.health <= 0.0f) {
+            vehicle.health  = 0.0f;
+            vehicle.wrecked = true;
+            screenState     = ScreenState::Wrecked;
+            triggerBanner("CAR WRECKED! [R] REPAIR HERE OR [ENTER] RESTART", RGB(255, 60, 60), 5.0f);
+            return;
         }
 
-        // Overtake & Combo scoring
-        int newPasses = vehicle.overtakes - prevOvertakes;
-        if (newPasses > 0) {
-            comboTimer = 4.5f;
-            comboMult  = std::min(8, comboMult + newPasses);
-            uint32_t pts = static_cast<uint32_t>(500 * newPasses * comboMult);
-            score += pts;
-            racePosition = std::max(1, 25 - vehicle.overtakes);
+        // Collision damage notification
+        if (vehicle.health < prevHealth - 1.0f) {
+            comboMult  = 1;
+            comboTimer = 0.0f;
             char msg[48];
-            std::snprintf(msg, sizeof(msg), "OVERTAKE +%u (%dX COMBO!)", pts, comboMult);
-            triggerBanner(msg, RGB(80, 255, 160), 1.6f);
+            std::snprintf(msg, sizeof(msg), "IMPACT! -%.0F%% HEALTH (%0.0F%% LEFT)",
+                          prevHealth - vehicle.health, vehicle.health);
+            triggerBanner(msg, (vehicle.health < 30.0f) ? RGB(255, 55, 55) : RGB(255, 165, 50), 1.6f);
+        }
+
+        // Near-miss & Overtake Combo scoring
+        int newPasses = vehicle.overtakes - prevOvertakes;
+        int newNear   = vehicle.nearMisses - lastNearMisses;
+        lastNearMisses = vehicle.nearMisses;
+
+        if (newPasses > 0) {
+            comboTimer = 5.0f;
+            comboMult  = std::min(8, comboMult + newPasses);
+            uint32_t pts = static_cast<uint32_t>((newNear > 0 ? 850 : 500) * newPasses * comboMult);
+            score += pts;
+            racePosition = std::max(1, (traffic.activeCount + 1) - vehicle.overtakes);
+            char msg[48];
+            if (newNear > 0) {
+                std::snprintf(msg, sizeof(msg), "CLOSE PASS! +%u (%dX COMBO)", pts, comboMult);
+                triggerBanner(msg, RGB(0, 245, 255), 1.6f);
+            } else {
+                std::snprintf(msg, sizeof(msg), "OVERTAKE +%u (%dX COMBO!)", pts, comboMult);
+                triggerBanner(msg, RGB(80, 255, 160), 1.5f);
+            }
         }
 
         if (comboTimer > 0.0f) {
@@ -405,10 +509,11 @@ void Game::tick(const InputState& in) {
             if (comboTimer <= 0.0f) comboMult = 1;
         }
 
-        // Continuous speed score accumulation
+        // Continuous speed & slipstream score accumulation
         if (vehicle.state == CrashState::Driving && vehicle.speed > 1000.0f) {
             float spdFrac = vehicle.speed / cfg::MAX_SPEED;
-            scoreAccum += (spdFrac * spdFrac * 45.0f * static_cast<float>(comboMult)) * cfg::STEP;
+            float draftBonus = 1.0f + 0.5f * vehicle.drafting;
+            scoreAccum += (spdFrac * spdFrac * 45.0f * draftBonus * static_cast<float>(comboMult)) * cfg::STEP;
             uint32_t whole = static_cast<uint32_t>(scoreAccum);
             if (whole > 0) {
                 score += whole;
@@ -416,23 +521,26 @@ void Game::tick(const InputState& in) {
             }
         }
 
-        // Checkpoint detection & time bonus
+        // Checkpoint detection: +Time, +Score, and +25% Pit Repair Health!
         int curSeg = (track.count > 0)
             ? (static_cast<int>(std::floor(mathutil::wrap(vehicle.z, track.length) / cfg::SEG_LEN)) % track.count)
             : 0;
         if (curSeg != lastCheckpointSeg) {
-            // Check segments between lastCheckpointSeg and curSeg
             int stepCount = (curSeg - lastCheckpointSeg + track.count) % track.count;
             if (stepCount > 0 && stepCount < 20) {
                 for (int s = 1; s <= stepCount; ++s) {
                     int checkSeg = (lastCheckpointSeg + s) % track.count;
                     if (track.segs[checkSeg].flags & 0x01) {
                         score += 2000u * static_cast<uint32_t>(comboMult);
+                        vehicle.health = std::min(100.0f, vehicle.health + 25.0f);
+                        vehicle.damage = 1.0f - (vehicle.health / 100.0f);
+                        if (vehicle.health >= 95.0f) cockpit.clearCracks();
+
                         if (gameMode == GameMode::ArcadeCheckpoint) {
-                            timeLeftSec = std::min(99.0f, timeLeftSec + 14.0f);
-                            triggerBanner("CHECKPOINT! +14.0S & +2000 PTS", RGB(0, 245, 255), 2.2f);
+                            timeLeftSec = std::min(99.0f, timeLeftSec + 15.0f);
+                            triggerBanner("CHECKPOINT! +15S & +25% REPAIR", RGB(0, 245, 255), 2.2f);
                         } else {
-                            triggerBanner("SECTOR CHECKPOINT! +2000 PTS", RGB(0, 245, 255), 2.0f);
+                            triggerBanner("CHECKPOINT! +25% HEALTH REPAIRED", RGB(0, 245, 255), 2.0f);
                         }
                         vehicle.audio.shiftCount++;
                     }
@@ -455,18 +563,16 @@ void Game::tick(const InputState& in) {
                 triggerBanner("GRAND PRIX FINISHED!", RGB(255, 225, 60), 4.0f);
             } else {
                 char msg[48];
-                std::snprintf(msg, sizeof(msg), "LAP %d! +5000 PTS", vehicle.lap);
+                std::snprintf(msg, sizeof(msg), "LAP %d! +5000 PTS & REPAIRED", vehicle.lap);
                 triggerBanner(msg, RGB(255, 230, 80), 2.5f);
             }
         }
 
-        // Live high-score check
         if (score > highScores.record(selectedTrack).highScore && !newHighScoreAchieved) {
             newHighScoreAchieved = true;
             triggerBanner("NEW TRACK HIGH SCORE!", RGB(255, 215, 0), 2.5f);
         }
 
-        // Arcade Checkpoint timer countdown
         if (gameMode == GameMode::ArcadeCheckpoint) {
             timeLeftSec -= cfg::STEP;
             if (timeLeftSec <= 0.0f) {
@@ -480,7 +586,6 @@ void Game::tick(const InputState& in) {
             }
         }
 
-        // Mountain parallax scroll
         float speedFrac = vehicle.speed / cfg::MAX_SPEED;
         ctx.bgX = mathutil::wrap(ctx.bgX + track.segs[curSeg].curve * speedFrac * 1.2f, 512.0f);
 
@@ -514,6 +619,7 @@ void Game::render() {
     // 3. Overlay on 320x240 base Framebuffer
     auto tO0 = std::chrono::steady_clock::now();
     if (!testMode) {
+        drawRoadHeadlightsAndSheen();
         draw3DCheckpointArches();
         if (weatherMode != 0 || wipersOn || vehicle.nitroActive) {
             drawWeatherAndWipers();
@@ -530,24 +636,30 @@ void Game::render() {
         drawHudOverlay();
     }
 
-    // Crash / Respawn fade pass (levels 0..4)
     if (vehicle.fade > 0.01f) {
         int level = mathutil::clamp(static_cast<int>(std::lround(vehicle.fade * 4.0f)), 1, 4);
         fadeRows(fb, 0, cfg::SCREEN_H, level);
     }
 
-    // 4. High-Resolution 960x720 DisplayBuffer Upscale, Vector/Raster GPS, Menus & Variable Pixel Size
+    // 4. High-Resolution 960x720 DisplayBuffer Upscale, AR Gap Guide, Cockpit Cluster, GPS & Menus
     if (!testMode) {
         displayFb.upscaleFromBase(fb, pixelSize);
 
         if (screenState == ScreenState::LaunchMenu) {
             renderLaunchScreen();
         } else {
+            if (showGapGuide && (screenState == ScreenState::Racing || screenState == ScreenState::Countdown)) {
+                renderArPassingGapAndTargets();
+            }
+            renderModernCockpitDetails();
             renderHighResHudAndGps();
+
             if (screenState == ScreenState::Countdown) {
                 renderCountdownOverlay();
             } else if (screenState == ScreenState::Paused) {
                 renderPauseOverlay();
+            } else if (screenState == ScreenState::Wrecked) {
+                renderWreckedOverlay();
             } else if (screenState == ScreenState::RaceOver) {
                 renderRaceOverOverlay();
             }
@@ -559,6 +671,208 @@ void Game::render() {
     auto tO1 = std::chrono::steady_clock::now();
     timers.overlayUs.push(std::chrono::duration<float, std::micro>(tO1 - tO0).count());
     timers.totalMs.push(std::chrono::duration<float, std::milli>(tO1 - frameStart).count());
+}
+
+void Game::drawRoadHeadlightsAndSheen() {
+    // Subtle twin headlight illumination cones on night/sunset tracks + wet road reflection in rain
+    if (ctx.theme != 1 && ctx.theme != 2 && weatherMode != 1) return;
+    for (int y = 135; y < 185; ++y) {
+        const RowInfo& r = ctx.rows[y];
+        if (r.seg == ROW_INVALID) continue;
+        float t = static_cast<float>(y - 135) / 50.0f;
+        int beamHalfW = static_cast<int>(r.hw * (0.28f + 0.35f * t));
+        int x0 = std::max(22, static_cast<int>(r.cx) - beamHalfW);
+        int x1 = std::min(298, static_cast<int>(r.cx) + beamHalfW);
+        uint32_t* row = fb.row(y);
+        for (int x = x0; x < x1; ++x) {
+            uint32_t c = row[x];
+            uint32_t add = ((c >> 3) & 0x001F1F1Fu);
+            row[x] = 0xFF000000u | std::min(0x00FFFFFFu, (c & 0x00FFFFFFu) + add);
+        }
+    }
+}
+
+void Game::renderArPassingGapAndTargets() {
+    if (track.count <= 0) return;
+
+    // 1. Scan traffic within 70m ahead to evaluate collision risk & find the widest open passing lane
+    const float playerHW = vphys::PLAYER_HALF_W * vehicle.hitboxScale; // ~0.141
+    int   threatCarIdx = -1;
+    float minThreatDist = 1e9f;
+    bool  tightRisk = false;
+
+    for (int i = 0; i < cfg::MAX_TRAFFIC; ++i) {
+        const Car& c = traffic.cars[i];
+        if (!c.active) continue;
+        float dz = mathutil::wrapDist(c.z, vehicle.z, track.length);
+        if (dz > 100.0f && dz < 4200.0f) {
+            float carHW = (atlas.img[c.spriteId].worldW / (2.0f * cfg::ROAD_HALF_W)) * vehicle.hitboxScale;
+            float safeLim = playerHW + carHW;
+            float dx = std::fabs(vehicle.x - c.offset);
+            if (dx < safeLim * 1.35f && dz < minThreatDist) {
+                minThreatDist = dz;
+                threatCarIdx  = i;
+                tightRisk     = (dx < safeLim * 1.05f);
+            }
+        }
+    }
+
+    uint32_t railCol = RGB(40, 255, 130); // Green = Clear passing corridor
+    if (vehicle.drafting > 0.25f && !tightRisk) {
+        railCol = RGB(0, 235, 255);       // Cyan = Slipstream Drafting active
+    } else if (threatCarIdx != -1) {
+        railCol = tightRisk ? RGB(255, 55, 65) : RGB(255, 210, 45); // Red = Blocked, Amber = Tight squeeze
+    }
+
+    // 2. Project 3D Bumper-Width Trajectory Rails onto the road ahead (segments n = 4..26)
+    const float centerX = (cfg::SCREEN_W * 0.5f) + ctx.shiftX;
+    for (int n = 4; n < 24; ++n) {
+        const RoadPoint& p0 = ctx.pts[n];
+        const RoadPoint& p1 = ctx.pts[n + 1];
+        if (p0.sy <= 16 || p1.sy <= 16 || p0.sy >= ctx.clipY[n] || p0.sy >= 176) continue;
+
+        float s0 = cfg::FOCAL_PX / p0.cz;
+        float s1 = cfg::FOCAL_PX / p1.cz;
+
+        for (int side = -1; side <= 1; side += 2) {
+            float worldOff = (vehicle.x + side * playerHW) * cfg::ROAD_HALF_W;
+            int x0 = static_cast<int>(std::lround((centerX + s0 * (p0.wx + worldOff)) * 3.0f));
+            int y0 = static_cast<int>(std::lround(p0.sy * 3.0f));
+            int x1 = static_cast<int>(std::lround((centerX + s1 * (p1.wx + worldOff)) * 3.0f));
+            int y1 = static_cast<int>(std::lround(p1.sy * 3.0f));
+
+            if (y0 >= 48 && y0 < 528 && y1 >= 48 && y1 < 528) {
+                displayFb.drawLine(x0, y0, x1, y1, 1, railCol);
+            }
+        }
+    }
+
+    // 3. Draw 3D Overhead Target Brackets & Open-Gap Direction Arrows on Nearby Traffic
+    for (int i = 0; i < cfg::MAX_TRAFFIC; ++i) {
+        const Car& c = traffic.cars[i];
+        if (!c.active) continue;
+        float dz = mathutil::wrapDist(c.z, vehicle.z, track.length);
+        if (dz < 250.0f || dz > 4800.0f) continue;
+
+        float zNorm = mathutil::wrap(c.z, track.length) / cfg::SEG_LEN;
+        int segIdx  = static_cast<int>(std::floor(zNorm)) % track.count;
+        int n       = (segIdx - ctx.baseSeg + track.count) % track.count;
+        if (n <= 0 || n >= cfg::DRAW_DIST) continue;
+
+        float t = zNorm - std::floor(zNorm);
+        const RoadPoint& p0 = ctx.pts[n];
+        const RoadPoint& p1 = ctx.pts[n + 1];
+        float cz = (1.0f - t) * p0.cz + t * p1.cz;
+        float wx = (1.0f - t) * p0.wx + t * p1.wx + c.offset * cfg::ROAD_HALF_W;
+        float wy = (1.0f - t) * p0.wy + t * p1.wy;
+        float s  = cfg::FOCAL_PX / cz;
+
+        int sx960 = static_cast<int>(std::lround((centerX + s * wx) * 3.0f));
+        int sy720 = static_cast<int>(std::lround((static_cast<float>(ctx.horizonY) - s * wy) * 3.0f));
+        int hPx720 = static_cast<int>(std::lround(s * atlas.img[c.spriteId].worldH * 3.0f));
+        int wPx960 = static_cast<int>(std::lround(s * atlas.img[c.spriteId].worldW * 3.0f));
+
+        int topY = sy720 - hPx720 - 18;
+        if (topY < 50 || sy720 >= ctx.clipY[n] * 3 || sx960 < 90 || sx960 > 870) continue;
+
+        float carHW   = (atlas.img[c.spriteId].worldW / (2.0f * cfg::ROAD_HALF_W)) * vehicle.hitboxScale;
+        float safeLim = playerHW + carHW;
+        float dx      = std::fabs(vehicle.x - c.offset);
+
+        uint32_t bCol = (dx < safeLim) ? RGB(255, 60, 65)
+                      : (dx < safeLim * 1.45f) ? RGB(255, 210, 50)
+                                               : RGB(70, 245, 140);
+
+        // Sleek bracket above car roof
+        int bw = std::clamp(wPx960, 44, 150);
+        int bx = sx960 - bw / 2;
+        displayFb.drawRect(bx, topY, bw, 3, bCol);
+        displayFb.drawRect(bx, topY, 3, 10, bCol);
+        displayFb.drawRect(bx + bw - 3, topY, 3, 10, bCol);
+
+        // If this car is in our path, show which side has the wider open gap to pass!
+        if (i == threatCarIdx && tightRisk) {
+            bool passLeft = (c.offset > 0.0f); // if car is on right side of road, left gap is wider
+            const char* passHint = passLeft ? "<< PASS LEFT" : "PASS RIGHT >>";
+            int tw = DisplayBuffer::textWidth(passHint, 2);
+            displayFb.drawRectAlpha(sx960 - tw / 2 - 6, topY - 24, tw + 12, 20, RGB(12, 16, 26), 215);
+            displayFb.drawText(sx960 - tw / 2, topY - 21, passHint, RGB(80, 255, 140), 2, true);
+        }
+    }
+}
+
+void Game::renderModernCockpitDetails() {
+    const CarSpec& spec = getCarSpec(selectedCar);
+    const int ox960 = cockpit.ox() * 3;
+    const int oy720 = cockpit.oy() * 3;
+
+    // 1. Selected Car Signature Ambient LED Line across dashboard top (y = 576 in 960x720)
+    displayFb.drawRect(60 + ox960, 576 + oy720, 840, 3, spec.accentColor);
+
+    // 2. Left-Side Wing Mirror (x = 18..106, y = 450..502)
+    {
+        int mx = 16 + ox960, my = 456 + oy720, mw = 86, mh = 48;
+        displayFb.drawRect(mx - 3, my - 3, mw + 6, mh + 6, RGB(45, 52, 64));
+        displayFb.drawBorder(mx - 3, my - 3, mw + 6, mh + 6, 2, spec.accentColor);
+        displayFb.drawRect(mx, my, mw, mh / 2, ctx.skyLut[190]);
+        displayFb.drawRect(mx, my + mh / 2, mw, mh / 2, ctx.pal[2][0].road);
+        displayFb.drawText(mx + 6, my + 5, "BLIND SPOT", RGB(180, 215, 245), 1, true);
+
+        // Check if any car is close behind on the left/right
+        bool blindWarn = false;
+        for (int i = 0; i < cfg::MAX_TRAFFIC; ++i) {
+            if (!traffic.cars[i].active) continue;
+            float d = mathutil::wrapDist(traffic.cars[i].z, vehicle.z, track.length);
+            if (d < 100.0f && d > -1200.0f && std::fabs(traffic.cars[i].offset - vehicle.x) < 0.65f) {
+                blindWarn = true;
+                break;
+            }
+        }
+        if (blindWarn) {
+            displayFb.drawRect(mx + 8, my + 24, mw - 16, 18, RGB(255, 65, 55));
+            displayFb.drawText(mx + 14, my + 29, "! CAR NEAR !", RGB(255, 255, 255), 1, false);
+        } else {
+            displayFb.drawText(mx + 22, my + 29, "CLEAR", RGB(80, 245, 140), 1, true);
+        }
+    }
+
+    // 3. High-Res Car Health & Integrity Display on Left Dashboard Panel (x = 28..148, y = 668..708)
+    {
+        int hx = 24 + ox960, hy = 668 + oy720, hw = 136, hh = 38;
+        displayFb.drawRectAlpha(hx, hy, hw, hh, RGB(10, 14, 22), 230);
+        uint32_t hCol = (vehicle.health > 60.0f) ? RGB(50, 245, 130)
+                      : (vehicle.health > 28.0f) ? RGB(255, 195, 40)
+                                                 : RGB(255, 50, 55);
+        displayFb.drawBorder(hx, hy, hw, hh, 2, hCol);
+
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "HEALTH %03.0F%%", vehicle.health);
+        displayFb.drawText(hx + 10, hy + 6, buf, hCol, 2, true);
+
+        int barW = static_cast<int>(std::lround((vehicle.health / 100.0f) * (hw - 20)));
+        displayFb.drawRect(hx + 10, hy + 25, hw - 20, 7, RGB(30, 35, 45));
+        displayFb.drawRect(hx + 10, hy + 25, std::max(0, barW), 7, hCol);
+    }
+
+    // 4. Right Dashboard ADAS / Car Spec / Slipstream Telemetry Panel (x = 800..936, y = 668..708)
+    {
+        int rx = 800 + ox960, ry = 668 + oy720, rw = 136, rh = 38;
+        displayFb.drawRectAlpha(rx, ry, rw, rh, RGB(10, 14, 22), 230);
+        displayFb.drawBorder(rx, ry, rw, rh, 2, spec.accentColor);
+
+        displayFb.drawText(rx + 8, ry + 6, spec.name, spec.accentColor, 1, true);
+        const char* adasTxt = steerAssistOn ? "ADAS: ON [G]" : "ADAS: OFF [G]";
+        displayFb.drawText(rx + 8, ry + 20, adasTxt,
+                           steerAssistOn ? RGB(80, 255, 150) : RGB(195, 205, 225), 1, true);
+    }
+
+    // 5. Slipstream Drafting Indicator above centre console when drafting
+    if (vehicle.drafting > 0.15f) {
+        int dx = 390 + ox960, dy = 528 + oy720, dw = 180, dh = 26;
+        displayFb.drawRectAlpha(dx, dy, dw, dh, RGB(8, 22, 38), 220);
+        displayFb.drawBorder(dx, dy, dw, dh, 2, RGB(0, 240, 255));
+        displayFb.drawText(dx + 14, dy + 6, "SLIPSTREAM DRAFTING!", RGB(0, 245, 255), 2, true);
+    }
 }
 
 void Game::draw3DCheckpointArches() {
@@ -583,11 +897,9 @@ void Game::draw3DCheckpointArches() {
         uint32_t postCol = isStartFinish ? RGB(240, 240, 250) : RGB(0, 225, 255);
         uint32_t beamCol = isStartFinish ? RGB(255, 50, 60)   : RGB(20, 90, 220);
 
-        // Left & right support towers
         Cockpit::drawRect(fb, cx - hw - postW, topY, postW, sy - topY, postCol);
         Cockpit::drawRect(fb, cx + hw,         topY, postW, sy - topY, postCol);
 
-        // Overhead banner beam with alternating stripes
         int xL = cx - hw - postW;
         int xR = cx + hw + postW;
         for (int y = topY; y < std::min(sy, topY + beamH); ++y) {
@@ -700,7 +1012,6 @@ void Game::drawWeatherAndWipers() {
 }
 
 void Game::drawHudOverlay() {
-    // Nitro bar on centre console (above digital speed)
     int nx = 136 + cockpit.ox();
     int ny = 198 + cockpit.oy();
     Cockpit::drawRect(fb, nx, ny, 48, 4, RGB(35, 40, 50));
@@ -723,7 +1034,6 @@ void Game::renderGpsMap(int boxX, int boxY, int boxW, int boxH, bool rotatingRad
     float pxWorld = track.mapX[playerSeg];
     float pyWorld = track.mapY[playerSeg];
     float heading = track.mapHeading[playerSeg];
-    // Rotate so player's current heading points straight UP (-pi/2)
     float rotAngle = -0.5f * mathutil::PI - heading;
     float cosR = std::cos(rotAngle);
     float sinR = std::sin(rotAngle);
@@ -744,7 +1054,6 @@ void Game::renderGpsMap(int boxX, int boxY, int boxW, int boxH, bool rotatingRad
         }
     };
 
-    // Draw full track spline loop
     int step = std::max(1, track.count / 180);
     for (int i = 0; i < track.count; i += step) {
         int next = (i + step) % track.count;
@@ -762,13 +1071,12 @@ void Game::renderGpsMap(int boxX, int boxY, int boxW, int boxH, bool rotatingRad
 
         if (distAhead < 85) {
             thickness = 2;
-            if (absC >= 2.2f)      segCol = RGB(255, 65, 65);   // Red sharp hairpin ahead
-            else if (absC >= 1.0f) segCol = RGB(255, 215, 50);  // Yellow medium curve ahead
-            else                   segCol = RGB(0, 245, 180);   // Cyan/Green straight ahead
+            if (absC >= 2.2f)      segCol = RGB(255, 65, 65);
+            else if (absC >= 1.0f) segCol = RGB(255, 215, 50);
+            else                   segCol = RGB(0, 245, 180);
         }
         displayFb.drawLine(x0, y0, x1, y1, thickness, segCol);
 
-        // Checkpoint & Start/Finish markers
         if (track.segs[i].flags & 0x02) {
             displayFb.drawCircle(x0, y0, 4, RGB(255, 255, 255), true);
         } else if (track.segs[i].flags & 0x01) {
@@ -776,7 +1084,6 @@ void Game::renderGpsMap(int boxX, int boxY, int boxW, int boxH, bool rotatingRad
         }
     }
 
-    // Draw Rival Traffic Cars on GPS
     for (int i = 0; i < cfg::MAX_TRAFFIC; ++i) {
         if (!traffic.cars[i].active) continue;
         int cSeg = static_cast<int>(std::floor(mathutil::wrap(traffic.cars[i].z, track.length) / cfg::SEG_LEN)) % track.count;
@@ -787,7 +1094,6 @@ void Game::renderGpsMap(int boxX, int boxY, int boxW, int boxH, bool rotatingRad
         }
     }
 
-    // Draw Player Marker (bright green triangle/circle)
     int px, py;
     projectPt(playerSeg, px, py);
     px = std::clamp(px, boxX + 8, boxX + boxW - 8);
@@ -852,13 +1158,14 @@ void Game::renderHighResHudAndGps() {
     uint32_t hiCol = newHighScoreAchieved ? RGB(255, 215, 40) : RGB(120, 215, 255);
     displayFb.drawText(195, 12, buf, hiCol, 2, true);
 
-    // 2. Countdown Timer or Mode Status (Top Center-Left)
+    // 2. Countdown Timer or Mode Status
     if (gameMode == GameMode::ArcadeCheckpoint) {
         uint32_t tCol = (timeLeftSec < 10.0f && ((tickCount / 10) & 1)) ? RGB(255, 60, 60) : RGB(255, 235, 80);
         std::snprintf(buf, sizeof(buf), "TIME %02.1FS", timeLeftSec);
         displayFb.drawText(595, 12, buf, tCol, 2, true);
     } else if (gameMode == GameMode::GrandPrix3Lap) {
-        std::snprintf(buf, sizeof(buf), "LAP %d/3  POS %d/25", std::min(3, vehicle.lap), racePosition);
+        std::snprintf(buf, sizeof(buf), "LAP %d/3  POS %d/%d",
+                      std::min(3, vehicle.lap), racePosition, traffic.activeCount + 1);
         displayFb.drawText(575, 12, buf, RGB(255, 230, 80), 2, true);
     } else {
         int lMin = static_cast<int>(vehicle.lapTime) / 60;
@@ -883,17 +1190,18 @@ void Game::renderHighResHudAndGps() {
         renderRallyCallout();
     }
 
-    // 6. Track & Quality Info Badge (Top-Left below header)
+    // 6. Track, Repair, Assist & Gap-Guide Status Strip (Top-Left below header)
     const TrackMetadata& meta = getTrackMetadata(selectedTrack);
-    std::snprintf(buf, sizeof(buf), "%s | %dPX [1-5] | [P]AUSE", meta.name, pixelSize);
-    displayFb.drawText(16, 50, buf, RGB(170, 200, 230), 1, true);
+    std::snprintf(buf, sizeof(buf), "%s | [H]REPAIR | [G]ASSIST:%s | [T]TRAFFIC | [Q]GAP-GUIDE",
+                  meta.name, steerAssistOn ? "ON" : "OFF");
+    displayFb.drawText(16, 50, buf, RGB(170, 205, 235), 1, true);
 
-    // 7. Floating Event Banner (Checkpoint / Overtake / New Record)
+    // 7. Floating Event Banner
     if (bannerTimer > 0.0f && bannerText[0] != '\0') {
         int tw = DisplayBuffer::textWidth(bannerText, 3);
         int bx = (DisplayBuffer::W - tw) / 2 - 16;
         int by = 104;
-        displayFb.drawRectAlpha(bx, by, tw + 32, 38, RGB(10, 14, 24), 210);
+        displayFb.drawRectAlpha(bx, by, tw + 32, 38, RGB(10, 14, 24), 215);
         displayFb.drawBorder(bx, by, tw + 32, 38, 2, bannerColor);
         displayFb.drawText(bx + 16, by + 9, bannerText, bannerColor, 3, true);
     }
@@ -915,82 +1223,89 @@ void Game::renderHighResHudAndGps() {
             int bw = std::clamp(us, 4, 38);
             displayFb.drawRect(28 + s * 42, 142, bw, 10, RGB(60, 195, 255));
         }
-        displayFb.drawText(28, 164, "F:FULLSCREEN L:SCALE B:BIOME V:MIRROR C:WEATHER", RGB(165, 190, 220), 1, true);
+        displayFb.drawText(28, 164, "F:FULLSCREEN L:SCALE G:ASSIST T:TRAFFIC H:REPAIR", RGB(165, 190, 220), 1, true);
     }
 }
 
 void Game::renderLaunchScreen() {
-    // Translucent dark backdrop over the live 3D autopilot flythrough
     displayFb.drawRectAlpha(0, 0, DisplayBuffer::W, DisplayBuffer::H, RGB(8, 12, 24), 155);
 
     // Top Title Header Card
-    displayFb.drawRectAlpha(40, 24, 880, 148, RGB(12, 18, 34), 225);
-    displayFb.drawBorder(40, 24, 880, 148, 3, RGB(0, 225, 255));
-    displayFb.drawRect(46, 162, 868, 4, RGB(255, 50, 140));
+    displayFb.drawRectAlpha(40, 18, 880, 138, RGB(12, 18, 34), 225);
+    displayFb.drawBorder(40, 18, 880, 138, 3, RGB(0, 225, 255));
+    displayFb.drawRect(46, 146, 868, 4, RGB(255, 50, 140));
 
     const char* title = "ARGON : OVERDRIVE";
     int titleW = DisplayBuffer::textWidth(title, 6);
-    displayFb.drawText((DisplayBuffer::W - titleW) / 2, 46, title, RGB(0, 245, 255), 6, true);
+    displayFb.drawText((DisplayBuffer::W - titleW) / 2, 36, title, RGB(0, 245, 255), 6, true);
 
-    const char* sub = "FIRST-PERSON SOFTWARE-RASTERIZED 3D ARCADE RACER (QT 6)";
+    const char* sub = "MODERN FIRST-PERSON SOFTWARE-RASTERIZED 3D RACER (QT 6)";
     int subW = DisplayBuffer::textWidth(sub, 2);
-    displayFb.drawText((DisplayBuffer::W - subW) / 2, 112, sub, RGB(255, 210, 80), 2, true);
+    displayFb.drawText((DisplayBuffer::W - subW) / 2, 98, sub, RGB(255, 210, 80), 2, true);
 
-    const char* hint = "ARROWS / WASD / MOUSE TO SELECT   |   ENTER / CLICK TO CONFIRM   |   F: FULLSCREEN";
+    const char* hint = "ARROWS / WASD / MOUSE TO SELECT   |   LEFT/RIGHT OR CLICK TO ADJUST   |   ENTER TO START";
     int hintW = DisplayBuffer::textWidth(hint, 1);
-    displayFb.drawText((DisplayBuffer::W - hintW) / 2, 142, hint, RGB(180, 205, 235), 1, true);
+    displayFb.drawText((DisplayBuffer::W - hintW) / 2, 126, hint, RGB(180, 205, 235), 1, true);
 
-    // Left Panel: Interactive Menu Options
-    displayFb.drawRectAlpha(40, 192, 475, 448, RGB(12, 18, 32), 225);
-    displayFb.drawBorder(40, 192, 475, 448, 2, RGB(70, 130, 210));
-    displayFb.drawText(64, 204, "RACE CONFIGURATION & SETTINGS", RGB(255, 190, 60), 2, true);
+    // Left Panel: 10 Interactive Menu Options
+    displayFb.drawRectAlpha(40, 170, 480, 474, RGB(12, 18, 32), 230);
+    displayFb.drawBorder(40, 170, 480, 474, 2, RGB(70, 130, 210));
+    displayFb.drawText(60, 182, "GARAGE, TRACK & RACE SETTINGS", RGB(255, 190, 60), 2, true);
 
     const TrackMetadata& meta = getTrackMetadata(selectedTrack);
+    const CarSpec&       car  = getCarSpec(selectedCar);
+
     char items[LAUNCH_MENU_ITEMS][64];
     std::snprintf(items[0], 64, ">> START RACE NOW <<");
-    std::snprintf(items[1], 64, "TRACK : < %d/5 %s >", selectedTrack + 1, meta.name);
-    std::snprintf(items[2], 64, "MODE  : < %s >", MODE_NAMES[static_cast<int>(gameMode)]);
-    std::snprintf(items[3], 64, "PIXEL : < %s >", PIXEL_PRESET_NAMES[pixelSizeIdx]);
-    std::snprintf(items[4], 64, "SCALE : < %s >", SCALE_NAMES[static_cast<int>(scaleMode)]);
-    std::snprintf(items[5], 64, "FULLSCREEN : < %s >", isFullscreen ? "ON (WINDOW: F)" : "OFF (PRESS F)");
-    std::snprintf(items[6], 64, "CRT SCANLINES : < %s >", crtScanlines ? "ENABLED" : "DISABLED");
-    std::snprintf(items[7], 64, "EXIT TO DESKTOP");
+    std::snprintf(items[1], 64, "CAR     : < %s (%dKM/H) >", car.name, car.topSpeedKmh);
+    std::snprintf(items[2], 64, "TRACK   : < %d/5 %s >", selectedTrack + 1, meta.name);
+    std::snprintf(items[3], 64, "TRAFFIC : < %s >", DENSITY_NAMES[selectedDensity]);
+    std::snprintf(items[4], 64, "ASSIST  : < STEER ASSIST %s >", steerAssistOn ? "ON (ADAS)" : "OFF (MANUAL)");
+    std::snprintf(items[5], 64, "MODE    : < %s >", MODE_NAMES[static_cast<int>(gameMode)]);
+    std::snprintf(items[6], 64, "PIXEL   : < %s >", PIXEL_PRESET_NAMES[pixelSizeIdx]);
+    std::snprintf(items[7], 64, "SCALE   : < %s >", SCALE_NAMES[static_cast<int>(scaleMode)]);
+    std::snprintf(items[8], 64, "SCREEN  : < FULLSCREEN %s >", isFullscreen ? "ON" : "OFF (PRESS F)");
+    std::snprintf(items[9], 64, "EXIT TO DESKTOP");
 
     for (int i = 0; i < LAUNCH_MENU_ITEMS; ++i) {
-        int iy = 236 + i * 48;
+        int iy = 216 + i * 41;
         bool sel = (menuCursor == i);
         if (sel) {
-            displayFb.drawRectAlpha(54, iy - 6, 447, 38, RGB(0, 160, 230), 180);
-            displayFb.drawBorder(54, iy - 6, 447, 38, 2, RGB(120, 250, 255));
+            displayFb.drawRectAlpha(52, iy - 5, 456, 33, RGB(0, 160, 230), 185);
+            displayFb.drawBorder(52, iy - 5, 456, 33, 2, RGB(120, 250, 255));
         }
         uint32_t col = (i == 0) ? (sel ? RGB(100, 255, 140) : RGB(60, 230, 110))
+                     : (i == 1) ? car.accentColor
                                 : (sel ? RGB(255, 255, 255) : RGB(185, 200, 225));
-        displayFb.drawText(68, iy + 5, items[i], col, 2, true);
+        displayFb.drawText(64, iy + 4, items[i], col, 2, true);
     }
 
-    // Right Panel: Track 2D GPS Circuit Preview & Saved High Scores
-    displayFb.drawRectAlpha(535, 192, 385, 448, RGB(12, 18, 32), 225);
-    displayFb.drawBorder(535, 192, 385, 448, 2, RGB(70, 130, 210));
+    // Right Panel: Track 2D GPS Circuit Preview, Selected Car Specs & Saved High Scores
+    displayFb.drawRectAlpha(535, 170, 385, 474, RGB(12, 18, 32), 230);
+    displayFb.drawBorder(535, 170, 385, 474, 2, RGB(70, 130, 210));
 
     char buf[96];
     std::snprintf(buf, sizeof(buf), "TRACK %d: %s", selectedTrack + 1, meta.name);
-    displayFb.drawText(555, 206, buf, RGB(0, 240, 255), 2, true);
-    displayFb.drawText(555, 228, meta.subtitle, RGB(190, 210, 235), 1, true);
+    displayFb.drawText(555, 184, buf, RGB(0, 240, 255), 2, true);
+    displayFb.drawText(555, 206, meta.subtitle, RGB(190, 210, 235), 1, true);
 
-    // Render 2D GPS Circuit Map Preview in box (555, 246, 345, 210)
-    renderGpsMap(555, 246, 345, 210, false);
+    renderGpsMap(555, 222, 345, 195, false);
 
-    // Track Telemetry & Records Table
+    // Selected Car Spec Bar
+    displayFb.drawRect(555, 426, 345, 2, car.accentColor);
+    std::snprintf(buf, sizeof(buf), "CAR: %s (%s)", car.name, car.subtitle);
+    displayFb.drawText(555, 434, buf, car.accentColor, 1, true);
+    std::snprintf(buf, sizeof(buf), "TOP SPD: %d KM/H  |  ARMOR: %.0F%%  |  GRIP: %.0F%%",
+                  car.topSpeedKmh, car.armorMult * 100.0f, car.steerMult * 100.0f);
+    displayFb.drawText(555, 450, buf, RGB(220, 235, 255), 1, true);
+
+    // Track Hall of Fame Records
     const TrackRecord& rec = highScores.record(selectedTrack);
-    float lenKm = (track.length * cfg::KMH_PER_WU) / 100.0f;
-    std::snprintf(buf, sizeof(buf), "DIFFICULTY: %-8s   LENGTH: %.1FKM", meta.difficulty, lenKm);
-    displayFb.drawText(555, 470, buf, RGB(255, 215, 80), 2, true);
-
-    displayFb.drawRect(555, 496, 345, 2, RGB(60, 110, 180));
-    displayFb.drawText(555, 506, "TRACK HALL OF FAME (SAVED RECORDS)", RGB(255, 120, 190), 2, true);
+    displayFb.drawRect(555, 470, 345, 2, RGB(60, 110, 180));
+    displayFb.drawText(555, 478, "TRACK HALL OF FAME (SAVED RECORDS)", RGB(255, 120, 190), 2, true);
 
     std::snprintf(buf, sizeof(buf), "HIGHEST SCORE  : %07u PTS", rec.highScore);
-    displayFb.drawText(555, 534, buf, RGB(255, 240, 90), 2, true);
+    displayFb.drawText(555, 506, buf, RGB(255, 240, 90), 2, true);
 
     if (rec.bestLapSec > 0.0f) {
         int bMin = static_cast<int>(rec.bestLapSec) / 60;
@@ -1000,20 +1315,20 @@ void Game::renderLaunchScreen() {
     } else {
         std::snprintf(buf, sizeof(buf), "BEST LAP TIME  : --:--.--");
     }
-    displayFb.drawText(555, 560, buf, RGB(100, 255, 170), 2, true);
+    displayFb.drawText(555, 534, buf, RGB(100, 255, 170), 2, true);
 
     std::snprintf(buf, sizeof(buf), "TOP SPEED REC  : %.0F KM/H", rec.maxSpeedKmh);
-    displayFb.drawText(555, 586, buf, RGB(130, 220, 255), 2, true);
+    displayFb.drawText(555, 562, buf, RGB(130, 220, 255), 2, true);
 
     std::snprintf(buf, sizeof(buf), "MOST OVERTAKES : %d CARS", rec.mostOvertakes);
-    displayFb.drawText(555, 612, buf, RGB(220, 195, 255), 2, true);
+    displayFb.drawText(555, 590, buf, RGB(220, 195, 255), 2, true);
 
     // Bottom Controls Strip
-    displayFb.drawRectAlpha(40, 654, 880, 44, RGB(12, 18, 32), 225);
-    displayFb.drawBorder(40, 654, 880, 44, 2, RGB(60, 110, 180));
-    const char* ctl = "DRIVE: WASD/ARROWS | NITRO: SPACE/SHIFT | QUALITY: 1-5 OR [/] | GPS: TAB | BIOME: B | FULLSCREEN: F";
+    displayFb.drawRectAlpha(40, 656, 880, 44, RGB(12, 18, 32), 230);
+    displayFb.drawBorder(40, 656, 880, 44, 2, RGB(60, 110, 180));
+    const char* ctl = "WASD/ARROWS: DRIVE | SPACE: NITRO | H: REPAIR | G: STEER ASSIST | T: TRAFFIC | Q: GAP GUIDE | F: FULLSCREEN";
     int ctlW = DisplayBuffer::textWidth(ctl, 1);
-    displayFb.drawText((DisplayBuffer::W - ctlW) / 2, 672, ctl, RGB(210, 230, 255), 1, true);
+    displayFb.drawText((DisplayBuffer::W - ctlW) / 2, 674, ctl, RGB(210, 230, 255), 1, true);
 }
 
 void Game::renderCountdownOverlay() {
@@ -1021,7 +1336,7 @@ void Game::renderCountdownOverlay() {
     displayFb.drawRectAlpha(gx, gy, gw, gh, RGB(12, 16, 26), 230);
     displayFb.drawBorder(gx, gy, gw, gh, 3, RGB(200, 210, 230));
 
-    int stage = static_cast<int>(std::ceil(countdownTimer)); // 3, 2, 1
+    int stage = static_cast<int>(std::ceil(countdownTimer));
     for (int i = 0; i < 3; ++i) {
         int lx = gx + 55 + i * 85;
         int ly = gy + 38;
@@ -1038,9 +1353,9 @@ void Game::renderCountdownOverlay() {
 }
 
 void Game::renderPauseOverlay() {
-    displayFb.drawRectAlpha(0, 0, DisplayBuffer::W, DisplayBuffer::H, RGB(6, 10, 20), 170);
-    const int bx = 260, by = 170, bw = 440, bh = 340;
-    displayFb.drawRectAlpha(bx, by, bw, bh, RGB(14, 20, 36), 235);
+    displayFb.drawRectAlpha(0, 0, DisplayBuffer::W, DisplayBuffer::H, RGB(6, 10, 20), 175);
+    const int bx = 240, by = 140, bw = 480, bh = 420;
+    displayFb.drawRectAlpha(bx, by, bw, bh, RGB(14, 20, 36), 238);
     displayFb.drawBorder(bx, by, bw, bh, 3, RGB(0, 225, 255));
 
     const char* hdr = "RACE PAUSED";
@@ -1049,20 +1364,47 @@ void Game::renderPauseOverlay() {
 
     char opts[PAUSE_MENU_ITEMS][64];
     std::snprintf(opts[0], 64, "RESUME RACE");
-    std::snprintf(opts[1], 64, "RESTART TRACK");
-    std::snprintf(opts[2], 64, "PIXEL QUALITY: < %s >", PIXEL_PRESET_NAMES[pixelSizeIdx]);
-    std::snprintf(opts[3], 64, "TOGGLE FULLSCREEN (F)");
-    std::snprintf(opts[4], 64, "RETURN TO LAUNCH SCREEN");
+    std::snprintf(opts[1], 64, "REPAIR CAR TO 100%% & CONTINUE");
+    std::snprintf(opts[2], 64, "STEER ASSIST : < %s >", steerAssistOn ? "ON (ADAS)" : "OFF (MANUAL)");
+    std::snprintf(opts[3], 64, "TRAFFIC      : < %s >", DENSITY_NAMES[selectedDensity]);
+    std::snprintf(opts[4], 64, "PIXEL QUALITY: < %s >", PIXEL_PRESET_NAMES[pixelSizeIdx]);
+    std::snprintf(opts[5], 64, "TOGGLE FULLSCREEN (F)");
+    std::snprintf(opts[6], 64, "RETURN TO LAUNCH SCREEN");
 
     for (int i = 0; i < PAUSE_MENU_ITEMS; ++i) {
-        int iy = 254 + i * 46;
+        int iy = 232 + i * 42;
         bool sel = (pauseCursor == i);
         if (sel) {
-            displayFb.drawRectAlpha(bx + 20, iy - 6, bw - 40, 36, RGB(0, 155, 225), 185);
-            displayFb.drawBorder(bx + 20, iy - 6, bw - 40, 36, 2, RGB(120, 250, 255));
+            displayFb.drawRectAlpha(bx + 20, iy - 5, bw - 40, 34, RGB(0, 155, 225), 185);
+            displayFb.drawBorder(bx + 20, iy - 5, bw - 40, 34, 2, RGB(120, 250, 255));
         }
-        displayFb.drawText(bx + 36, iy + 5, opts[i], sel ? RGB(255, 255, 255) : RGB(185, 205, 230), 2, true);
+        displayFb.drawText(bx + 32, iy + 5, opts[i], sel ? RGB(255, 255, 255) : RGB(185, 205, 230), 2, true);
     }
+}
+
+void Game::renderWreckedOverlay() {
+    displayFb.drawRectAlpha(0, 0, DisplayBuffer::W, DisplayBuffer::H, RGB(35, 6, 10), 165);
+    const int bx = 190, by = 160, bw = 580, bh = 340;
+    displayFb.drawRectAlpha(bx, by, bw, bh, RGB(18, 14, 24), 242);
+    displayFb.drawBorder(bx, by, bw, bh, 3, RGB(255, 55, 60));
+
+    const char* hdr = "CRITICAL VEHICLE WRECKED!";
+    int hw = DisplayBuffer::textWidth(hdr, 4);
+    displayFb.drawText(bx + (bw - hw) / 2, by + 30, hdr, RGB(255, 65, 65), 4, true);
+
+    const char* sub = "CAR HEALTH REACHED 0% — ENGINE & CHASSIS DISABLED";
+    int sw = DisplayBuffer::textWidth(sub, 2);
+    displayFb.drawText(bx + (bw - sw) / 2, by + 84, sub, RGB(255, 215, 80), 2, true);
+
+    displayFb.drawRectAlpha(bx + 50, by + 130, bw - 100, 48, RGB(0, 140, 90), 210);
+    displayFb.drawBorder(bx + 50, by + 130, bw - 100, 48, 2, RGB(80, 255, 160));
+    displayFb.drawText(bx + 78, by + 146, "PRESS [R] OR [H] : REPAIR HERE & CONTINUE!", RGB(255, 255, 255), 2, true);
+
+    displayFb.drawRectAlpha(bx + 50, by + 195, bw - 100, 48, RGB(25, 80, 170), 210);
+    displayFb.drawBorder(bx + 50, by + 195, bw - 100, 48, 2, RGB(90, 200, 255));
+    displayFb.drawText(bx + 78, by + 211, "PRESS [ENTER]    : RESTART RACE FROM GRID", RGB(255, 255, 255), 2, true);
+
+    displayFb.drawText(bx + 125, by + 275, "PRESS [ESC] TO RETURN TO LAUNCH MENU", RGB(180, 200, 230), 2, true);
 }
 
 void Game::renderRaceOverOverlay() {
@@ -1092,7 +1434,8 @@ void Game::renderRaceOverOverlay() {
     std::snprintf(buf, sizeof(buf), "TRACK HIGH SCORE : %07u PTS", rec.highScore);
     displayFb.drawText(bx + 70, by + 180, buf, RGB(255, 215, 70), 3, true);
 
-    std::snprintf(buf, sizeof(buf), "TOTAL OVERTAKES  : %d CARS (POS %d/25)", vehicle.overtakes, racePosition);
+    std::snprintf(buf, sizeof(buf), "TOTAL OVERTAKES  : %d CARS (POS %d/%d)",
+                  vehicle.overtakes, racePosition, traffic.activeCount + 1);
     displayFb.drawText(bx + 70, by + 225, buf, RGB(100, 255, 160), 2, true);
 
     std::snprintf(buf, sizeof(buf), "MAX SPEED REACHED: %.1F KM/H", raceMaxSpeedKmh);

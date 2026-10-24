@@ -1,74 +1,56 @@
-# Argon Overdrive: Game Improvement & Feature Expansion Plan
+# Argon Overdrive: Modern Realism & Gameplay Overhaul Plan (v3.0)
 
-This document outlines the step-by-step engineering plan to evolve the software-rasterized pseudo-3D Qt 6 prototype into a complete, full-featured first-person arcade racing game while strictly preserving all hard constraints (**100% CPU software rasterization, Qt 6 presentation, First-Person perspective, zero steady-state allocations in the core engine, and all 42 Phase 1–8 verification checks passing**).
-
----
-
-## Step 1: Fullscreen & Window Scaling Fix + Variable Pixel Size / High-Resolution Rasterization
-
-1. **Fullscreen & Dynamic Viewport Scaling (`gamewidget.h/.cpp`)**:
-   - **Root Cause Fix**: Remove the restrictive integer `std::floor(s)` letterboxing lock that kept the rendered view inside a small sub-rectangle when maximizing or entering fullscreen.
-   - **Scaling Modes (`L` key or Launch Menu)**:
-     - `Full Window (Stretch)`: Fills 100% of the window or fullscreen display with zero black bars (default).
-     - `Aspect Fit (4:3)`: Scales smoothly to the maximum 4:3 rectangle touching the window edges.
-     - `Integer Pixel-Perfect`: Crisp integer-multiple scaling for purist retro monitors.
-   - **Fullscreen Toggle (`F` or `F11` key, or Launch/Pause Menu)**: Calls `showFullScreen()` / `showNormal()` seamlessly.
-
-2. **Variable Pixel Size & High-Resolution Quality Engine (`framebuffer.h`, `game.h/.cpp`)**:
-   - Introduce a high-resolution software display buffer (`960x720` max resolution) alongside the `320x240` base buffer.
-   - Support **5 User-Selectable Pixel Size / Quality Presets** (live-switchable via `1`–`5` or `[` / `]` keys, and configurable on the Launch Screen):
-     - **Ultra Crisp (1px / `960x720` effective)**: 3x super-sampled scanline road, smooth curb/lane edges, high-res cockpit gauges, and crisp vector-raster GPS.
-     - **High Quality (2px / `480x360` effective)**: Sharp arcade raster look.
-     - **Classic Arcade (3px / `320x240` effective)**: Original blueprint resolution.
-     - **Retro Chunky (4px / `240x180` effective)**: 90s DOS/Saturn chunky pixel aesthetic.
-     - **Lo-Fi 8-Bit (6px / `160x120` effective)**: Ultra-chunky retro mosaic mode.
+This plan details the step-by-step engineering upgrades to transform **Argon: Overdrive** into a modern, realistic first-person software-rasterized racing game while maintaining all core constraints (**100% CPU software rasterization, Qt 6 presentation, First-Person perspective, and all automated verification checks passing**).
 
 ---
 
-## Step 2: 5 Distinct Racing Tracks & Biomes (`track.h/.cpp`, `roadrender.h/.cpp`)
+## Step 1: Realistic & Fair Collision Physics + Visual Passing-Gap & Lane Guides
 
-Build 5 multi-sector tracks with distinct curvature, elevation profiles, scenery placement, traffic density, and colour palettes:
-1. **Emerald Coast Highway** (*Classic Daylight*): Sweeping coastal bends, gentle hills, balanced traffic.
-2. **Neon Mirage Speedway** (*Synthwave Sunset*): High-speed sunset highway, long nitro straights, rhythm S-curves.
-3. **Cyber Tokyo Expressway** (*Cyber Neon Night*): Tight night chicanes, rapid elevation drops, dense highway traffic.
-4. **Alpine Glacier Pass** (*Alpine Snow*): Steep mountain grades (`+2400 wu`), blind crests, technical hairpins, snow weather.
-5. **Crimson Canyon Gauntlet** (*Desert Canyon Dusk*): Red-rock canyon endurance track with extreme curves, steep plunges, and fast rivals.
-
----
-
-## Step 3: 2D GPS Navigation System & Rally Turn Callouts (`track.h/.cpp`, `game.h/.cpp`)
-
-1. **Precomputed 2D Track Map Spline**:
-   - Integrate segment curvature into 2D `(mapX, mapY)` coordinates across the entire circuit and normalize into a closed loop.
-2. **Dual-Mode Cockpit GPS Navigator**:
-   - **Rotating Local Radar + Full Circuit Map**: Embedded in the cockpit navigation display (and expandable with `Tab`), showing the road geometry ahead colour-coded by curvature severity (Green = Straight, Yellow = Medium Turn, Red = Sharp Hairpin), player heading arrow, checkpoint gates, and live rival car blips.
-3. **Turn-by-Turn GPS Callout Banner**:
-   - Scans 60 segments ahead of the player and displays real-time rally callout icons and text (`<< EASY LEFT`, `>> MEDIUM RIGHT`, `<<< HARD HAIRPIN LEFT!`, `/\ CREST AHEAD`).
+1. **Fair Physical Hitboxes & Non-Interrupting Bump Physics (`collision.h/.cpp`, `vehicle.h/.cpp`)**:
+   - **Refined Gameplay Hitboxes**: Reduce normalized player and traffic lateral hitboxes in gameplay mode so a 3-lane road provides wide, realistic clearance for lane-splitting and overtaking between adjacent cars.
+   - **Physical Impulse & Bounce Response**: Instead of forcing a 3-second fade-out respawn cutscene on every contact, traffic and scenery collisions now apply realistic **lateral momentum transfer (bump push-away)**, speed scrubbing, metallic crunch/scrape audio, and proportional **Car Health damage** (`5%`–`35%`).
+2. **AR Lane-Width Trajectory Rails & Passing-Gap Indicators (`game.cpp`)**:
+   - **Projected Bumper Trajectory Lines**: Renders subtle 3D perspective lane-guide rails on the asphalt ahead showing the exact width of the player's car projected down the road (`Green` = Clear Path, `Amber` = Tight Squeeze / Slipstream Zone, `Red` = Obstacle in Path).
+   - **Overhead Traffic Gap & Proximity Brackets**: Draws modern HUD target brackets above nearby traffic cars indicating closing distance, safe passing side, and **Slipstream / Drafting** lock.
 
 ---
 
-## Step 4: Persistent High Scores & Best Lap Records (`highscores.h/.cpp`)
+## Step 2: Toggleable Steering Assist (ADAS), 4 Selectable Cars & Traffic Congestion Levels
 
-1. **Per-Track Record Storage (`highscores.dat`)**:
-   - Automatically loads at startup and saves on race completion or new record:
-     - Highest Score per track
-     - Fastest Lap Time per track
-     - Top Speed achieved per track
-     - Best Overtake count per track
-2. **Live Score & Multiplier System**:
-   - Score accumulates continuously from speed $\times$ combo multiplier, `+500` per overtake, `+1000` for high-speed near misses, and `+2500` per checkpoint/lap completion.
-   - Live `HI-SCORE` indicator in the HUD turns gold when the player surpasses the current track record.
+1. **Toggleable Steering / Cornering Assist (`STEER ASSIST: ON / OFF` via `G` key or Menu)**:
+   - **OFF (Pure Manual Realism)**: Full centrifugal force pushes the car toward the outside of bends; the car never turns automatically in corners.
+   - **ON (Apex / Lane Assist)**: Provides gentle cornering counter-force (`55%` centrifugal compensation) and subtle lane stabilization for relaxed arcade driving.
+2. **4 Selectable Player Cars (`CarSpec` `0..3` via Launch Menu or `V` in Menu)**:
+   - **1. `APEX GT-R`** (*Balanced Twin-Turbo GT* — `300 km/h`, Balanced Grip & Acceleration, `100 HP` Health, Cyan Carbon Interior)
+   - **2. `VORTEX V12`** (*Hypercar Interceptor* — `345 km/h`, Extreme Acceleration, `85 HP` Health, Crimson Alcantara Interior)
+   - **3. `DRIFT SPEC-R`** (*Touge Track Special* — `285 km/h`, Maximum Cornering Grip & Nimble Width, `95 HP` Health, Amber Titanium Interior)
+   - **4. `TITAN ENFORCER`** (*Armored Endurance GT* — `295 km/h`, Heavy Impact Resistance, `150 HP` Health, Emerald Tactical Interior)
+3. **Traffic Congestion Selector (`LOW` / `MEDIUM` / `HIGH` via Launch/Pause Menu or `T` key)**:
+   - **Low Congestion**: `8` active cars, long spacing (`22` segments minimum separation).
+   - **Medium Congestion**: `15` active cars, balanced spacing (`15` segments separation).
+   - **High / Hard Congestion**: `24` active cars, dense rush-hour packs (`10` segments separation).
 
 ---
 
-## Step 5: Interactive Launch Screen, Game Modes, Countdown & Post-Race Flow (`game.h/.cpp`, `gamewidget.cpp`)
+## Step 3: Car Health, On-Spot Repair & Wreck Recovery System (`vehicle.h/.cpp`, `game.cpp`)
 
-1. **Launch / Title Screen (`GameState::LaunchMenu`)**:
-   - Live 3D autopilot camera flying through the currently selected track in the background.
-   - Software-rasterized title logo (**`ARGON OVERDRIVE`**), interactive menu with keyboard (`Up`/`Down`/`Left`/`Right`/`Enter`) and mouse support, 2D GPS track preview card, track stats, and saved High Score / Best Lap display.
-2. **Game Modes**:
-   - **Arcade Checkpoint Mode**: Race against the countdown clock (`+15s` at each checkpoint arch).
-   - **Grand Prix Mode (3 Laps)**: Race 24 opponents from P25 to P1 over 3 laps.
-   - **Free Run Mode**: Endless racing with full telemetry.
-3. **3-2-1-GO Starting Grid Countdown & Finish / High-Score Celebration Screen**:
-   - Starting gantry lights with synthesized audio beeps, checkpoint arches along the road, floating score popups, and a comprehensive Post-Race Results / New High Score screen.
+1. **Car Health Bar (`0%`–`100%` Integrity)**:
+   - Displayed on both the digital dashboard cluster and top HUD (`Green` -> `Amber` -> `Flashing Red` below `25%`).
+   - Passing through 3D Checkpoint Arches repairs `+25%` Health; pressing `H` performs an instant **Field Repair** (`+50%` Health).
+2. **Zero-Health Wrecked State (`ScreenState::Wrecked`)**:
+   - When Car Health reaches `0%`, the engine stalls with warning alarms and presents an immediate choice:
+     - **Press `[R]` to Repair on the Spot & Continue Driving** (restores `100%` Health at your current track position with temporary collision immunity).
+     - **Press `[ENTER]` to Restart the Race from the Starting Grid**.
+
+---
+
+## Step 4: Modern Detailed First-Person Cockpit & Enhanced Raster Graphics (`cockpit.cpp`, `roadrender.cpp`, `sprites.cpp`, `game.cpp`)
+
+1. **Modern Supercar Interior (`960x720` High-Detail Rasterization)**:
+   - **Multi-Layered Dashboard**: Carbon-fibre instrument binnacle, stitched leather dash top, metallic A-pillar trim with tweeter grilles, sculpted side air vents, and dynamic LED ambient accent strip matching the selected car.
+   - **Sequential RPM Shift-Light Array**: 8-LED horizontal shift bar above the steering column lighting up `Green` -> `Yellow` -> `Red` -> `Blue` as RPM approaches redline.
+   - **Flat-Bottom GT Steering Wheel + Paddle Shifters + Driver Gloves**: Detailed flat-bottom wheel rim, perforated leather grips, rotating `-` / `+` metallic paddle shifters, 3D spokes, and driver racing gloves at 9-and-3.
+2. **Realistic World & Sprite Raster Shading**:
+   - **Asphalt Specular Sheen & Headlight Beams**: Subtle road center sheen, dynamic twin headlight cones illuminating the road ahead in night/sunset tracks, and 3D roadside curve chevrons.
+   - **Enhanced Rival Vehicle Sprites**: Contact shadow patches on the asphalt, metallic body gradients, rear spoilers, dual exhausts, and glowing LED tail/brake light bars.
+   - **Slipstream Drafting & Thread-the-Needle Mechanics**: Aerodynamic drafting bonus behind rival cars (`DRAFTING +SPEED!`) and `THREAD THE NEEDLE +2000!` bonus when splitting between two cars.

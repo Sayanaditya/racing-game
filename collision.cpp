@@ -35,8 +35,7 @@ inline float signNonZero(float x) {
     return (x >= 0.0f) ? +1.0f : -1.0f;
 }
 
-// Swept 2D segment-vs-AABB test in (x, r) relative space:
-// Segment from (x0, r0) to (x1, r1) vs box [cx - lim, cx + lim] x [rMin, rMax]
+// Swept 2D segment-vs-AABB test in (x, r) relative space
 bool sweptBoxOverlap(float x0, float r0, float x1, float r1,
                      float cx, float lim, float rMin, float rMax, float& midXOut) {
     float t0 = 0.0f, t1 = 1.0f;
@@ -58,7 +57,6 @@ bool sweptBoxOverlap(float x0, float r0, float x1, float r1,
         return true;
     };
 
-    // Strict interior overlap (matching hi <= rMin or lo >= rMax => no hit)
     const float eps = 1e-5f;
     if (!clipAxis(-dr, (r0 - rMin) - eps)) return false;
     if (!clipAxis( dr, (rMax - r0) - eps)) return false;
@@ -79,28 +77,34 @@ CollisionEvent detectCollision(const Vehicle& v, float prevZ, float prevX,
     const float L = track.length;
     if (L <= 0.0f) return ev;
 
+    const float hbScale  = (v.hitboxScale > 0.1f) ? v.hitboxScale : 1.0f;
+    const float playerHW = vphys::PLAYER_HALF_W * hbScale;
+    const float playerLen = vphys::PLAYER_LEN * (v.realisticMode ? 0.62f : 1.0f);
+
     // 1. Traffic: relative sweep in (x, r) space
     for (int i = 0; i < cfg::MAX_TRAFFIC; ++i) {
         const Car& car = traffic.cars[i];
         if (!car.active) continue;
 
         const SpriteImage& img = atlas.img[car.spriteId];
-        float otherLen = img.worldH * 0.6f;
+        float otherLen = img.worldH * (v.realisticMode ? 0.42f : 0.60f);
         float r0  = mathutil::wrapDist(traffic.prevZ[i], prevZ, L);
         float r1  = mathutil::wrapDist(car.z, v.z, L);
-        float lim = vphys::PLAYER_HALF_W + img.worldW / (2.0f * cfg::ROAD_HALF_W);
+        float carHalfW = (img.worldW / (2.0f * cfg::ROAD_HALF_W)) * hbScale;
+        float lim = playerHW + carHalfW;
 
         float hitX = v.x;
-        if (!sweptBoxOverlap(prevX, r0, v.x, r1, car.offset, lim, -otherLen, vphys::PLAYER_LEN, hitX)) {
+        if (!sweptBoxOverlap(prevX, r0, v.x, r1, car.offset, lim, -otherLen, playerLen, hitX)) {
             continue;
         }
 
         float dx   = std::fabs(hitX - car.offset);
-        float vrel = std::max(0.0f, v.speed - car.speed);
+        float vrel = std::max(800.0f, std::fabs(v.speed - car.speed));
         float f    = mathutil::clamp((lim - dx) / lim, 0.0f, 1.0f);
         ev.kind     = CollisionEvent::Traffic;
-        ev.severity = mathutil::clamp((vrel / (0.6f * cfg::MAX_SPEED)) * (0.4f + 0.6f * f), 0.0f, 1.0f);
+        ev.severity = mathutil::clamp((vrel / (0.6f * cfg::MAX_SPEED)) * (0.4f + 0.6f * f), 0.05f, 1.0f);
         ev.dir      = signNonZero(hitX - car.offset);
+        ev.carIndex = i;
         return ev;
     }
 
@@ -128,18 +132,18 @@ CollisionEvent detectCollision(const Vehicle& v, float prevZ, float prevX,
             if (item.spriteId >= SPR_COUNT || !SOLID_SPRITE[item.spriteId]) continue;
 
             const SpriteImage& img = atlas.img[item.spriteId];
-            float halfN = (img.worldW * TRUNK_FRAC[item.spriteId]) / (2.0f * cfg::ROAD_HALF_W);
-            float lim   = vphys::PLAYER_HALF_W + halfN;
+            float halfN = ((img.worldW * TRUNK_FRAC[item.spriteId]) / (2.0f * cfg::ROAD_HALF_W)) * hbScale;
+            float lim   = playerHW + halfN;
 
             float hitX = v.x;
-            if (!sweptBoxOverlap(prevX, rPrev, v.x, rNow, item.offset, lim, -120.0f, vphys::PLAYER_LEN, hitX)) {
+            if (!sweptBoxOverlap(prevX, rPrev, v.x, rNow, item.offset, lim, -120.0f, playerLen, hitX)) {
                 continue;
             }
 
             float dx = std::fabs(hitX - item.offset);
             float f  = mathutil::clamp((lim - dx) / lim, 0.0f, 1.0f);
             ev.kind     = CollisionEvent::Scenery;
-            ev.severity = mathutil::clamp(speedFrac * (0.4f + 0.6f * f), 0.0f, 1.0f);
+            ev.severity = mathutil::clamp(speedFrac * (0.4f + 0.6f * f), 0.05f, 1.0f);
             ev.dir      = signNonZero(hitX - item.offset);
             return ev;
         }

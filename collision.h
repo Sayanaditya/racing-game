@@ -11,6 +11,7 @@ struct CollisionEvent {
     } kind = None;
     float severity = 0.0f;   // 0..1
     float dir      = 0.0f;   // +-1: which way to push the player laterally
+    int   carIndex = -1;     // index of traffic car hit (if kind == Traffic)
 };
 
 CollisionEvent detectCollision(const Vehicle& v, float prevZ, float prevX,

@@ -39,46 +39,88 @@ void drawCarSprite(uint32_t* buf, int w, int h, uint32_t bodyMain, uint32_t body
         if (x >= 0 && x < w && y >= 0 && y < h) buf[y * w + x] = c;
     };
 
-    // Tyres (bottom left and right)
-    for (int y = h - 9; y < h; ++y) {
-        for (int x = 3; x < 10; ++x) setPx(x, y, RGB(24, 24, 28));
-        for (int x = w - 10; x < w - 3; ++x) setPx(x, y, RGB(24, 24, 28));
-    }
-    // Lower chassis & diffuser
-    for (int y = h - 14; y < h - 3; ++y) {
+    // 1. Ground contact shadow patch under chassis & tyres
+    for (int y = h - 3; y < h; ++y) {
         for (int x = 2; x < w - 2; ++x) {
-            setPx(x, y, (y > h - 7) ? bodyDark : bodyMain);
+            setPx(x, y, RGB(18, 20, 24));
         }
     }
-    // Upper cabin / roof tapering inward
-    for (int y = 4; y < h - 14; ++y) {
-        int inset = 4 + (h - 14 - y) / 2;
+
+    // 2. Wide performance rear tyres with tread & rim highlight
+    for (int y = h - 10; y < h - 1; ++y) {
+        for (int x = 2; x < 10; ++x) {
+            setPx(x, y, ((x + y) & 1) ? RGB(22, 24, 28) : RGB(32, 35, 42));
+        }
+        for (int x = w - 10; x < w - 2; ++x) {
+            setPx(x, y, ((x + y) & 1) ? RGB(22, 24, 28) : RGB(32, 35, 42));
+        }
+    }
+
+    // 3. Sculpted lower rear bumper & carbon aerodynamic diffuser
+    for (int y = h - 15; y < h - 3; ++y) {
+        for (int x = 2; x < w - 2; ++x) {
+            if (y >= h - 7 && x >= 9 && x < w - 9) {
+                // Carbon diffuser with vertical strakes
+                bool fin = (x == 12 || x == 17 || x == w - 18 || x == w - 13);
+                setPx(x, y, fin ? RGB(90, 96, 110) : RGB(28, 30, 36));
+            } else {
+                float edgeDist = std::abs(x - w / 2) / static_cast<float>(w / 2);
+                uint32_t col = (y > h - 8) ? bodyDark : mathutil::lerpColor(bodyMain, bodyDark, 0.35f * edgeDist);
+                setPx(x, y, col);
+            }
+        }
+    }
+
+    // 4. Tapered fastback cabin & roofline with specular highlight
+    for (int y = 4; y < h - 15; ++y) {
+        int inset = 4 + (h - 15 - y) / 2;
         for (int x = inset; x < w - inset; ++x) {
-            setPx(x, y, (y < 8) ? bodyLight : bodyMain);
+            uint32_t col = (y < 7) ? bodyLight : bodyMain;
+            if (x == inset || x == w - inset - 1) col = bodyDark;
+            setPx(x, y, col);
         }
     }
-    // Rear window
+
+    // 5. Rear windshield with defroster/louver lines & gloss reflection
     for (int y = 7; y < 15; ++y) {
         int inset = 7 + (15 - y) / 2;
         for (int x = inset; x < w - inset; ++x) {
-            setPx(x, y, (x + y) % 3 == 0 ? RGB(70, 95, 130) : RGB(38, 52, 74));
+            bool louver = (y & 1) == 0;
+            bool gloss  = (x + y == 22 || x + y == 23);
+            setPx(x, y, gloss ? RGB(140, 175, 215) : (louver ? RGB(30, 40, 56) : RGB(52, 70, 96)));
         }
     }
-    // Tail lights (glowing red/orange)
-    for (int y = h - 12; y < h - 8; ++y) {
-        for (int x = 4; x < 11; ++x) setPx(x, y, RGB(255, 35, 35));
-        for (int x = w - 11; x < w - 4; ++x) setPx(x, y, RGB(255, 35, 35));
-        setPx(6, y, RGB(255, 180, 80));
-        setPx(w - 7, y, RGB(255, 180, 80));
+
+    // 6. Carbon-fibre GT rear spoiler wing
+    for (int x = 3; x < w - 3; ++x) {
+        setPx(x, h - 17, RGB(36, 40, 48));
+        setPx(x, h - 16, RGB(70, 76, 90));
     }
-    // License plate & twin exhausts
-    for (int y = h - 9; y < h - 6; ++y) {
-        for (int x = w / 2 - 4; x < w / 2 + 4; ++x) setPx(x, y, RGB(240, 220, 90));
+    setPx(8,  h - 15, RGB(40, 44, 52));
+    setPx(w - 9, h - 15, RGB(40, 44, 52));
+
+    // 7. Full-width modern LED tail-light bar & glowing brake clusters
+    for (int x = 4; x < w - 4; ++x) {
+        setPx(x, h - 13, RGB(255, 40, 50));
     }
-    setPx(11, h - 4, RGB(180, 185, 195));
-    setPx(12, h - 4, RGB(180, 185, 195));
-    setPx(w - 13, h - 4, RGB(180, 185, 195));
-    setPx(w - 12, h - 4, RGB(180, 185, 195));
+    for (int y = h - 13; y < h - 9; ++y) {
+        for (int x = 3; x < 12; ++x) setPx(x, y, RGB(255, 30, 40));
+        for (int x = w - 12; x < w - 3; ++x) setPx(x, y, RGB(255, 30, 40));
+        // Inner bright brake LED cores
+        setPx(6, y, RGB(255, 200, 110));
+        setPx(7, y, RGB(255, 200, 110));
+        setPx(w - 8, y, RGB(255, 200, 110));
+        setPx(w - 7, y, RGB(255, 200, 110));
+    }
+
+    // 8. Illuminated license plate & quad chrome exhaust tips
+    for (int y = h - 10; y < h - 7; ++y) {
+        for (int x = w / 2 - 4; x < w / 2 + 4; ++x) setPx(x, y, RGB(240, 230, 130));
+    }
+    setPx(10, h - 5, RGB(210, 220, 235));
+    setPx(11, h - 5, RGB(140, 150, 165));
+    setPx(w - 12, h - 5, RGB(210, 220, 235));
+    setPx(w - 11, h - 5, RGB(140, 150, 165));
 }
 
 } // namespace
@@ -104,14 +146,12 @@ void buildSpriteAtlas(SpriteAtlas& atlas) {
     {
         int w = 40, h = 64;
         uint32_t* px = allocSprite(SPR_TREE, w, h, 700.0f, 1100.0f);
-        // Trunk
         for (int y = 40; y < h; ++y) {
             int halfT = 3 + (y - 40) / 8;
             for (int x = w / 2 - halfT; x <= w / 2 + halfT; ++x) {
                 px[y * w + x] = (x < w / 2) ? RGB(115, 72, 38) : RGB(82, 48, 24);
             }
         }
-        // Leafy canopy (3 overlapping circles)
         const int cx[3] = { 20, 13, 27 };
         const int cy[3] = { 20, 29, 29 };
         const int cr[3] = { 16, 12, 12 };
@@ -180,17 +220,14 @@ void buildSpriteAtlas(SpriteAtlas& atlas) {
     {
         int w = 16, h = 56;
         uint32_t* px = allocSprite(SPR_LAMP, w, h, 200.0f, 1500.0f);
-        // Vertical post anchored near x = 7..8
         for (int y = 6; y < h; ++y) {
             px[y * w + 7] = RGB(160, 168, 178);
             px[y * w + 8] = RGB(110, 116, 126);
         }
-        // Horizontal arm extending toward road (left side of sprite, x = 1..8, flipped for left roadside)
         for (int x = 1; x <= 8; ++x) {
             px[5 * w + x] = RGB(175, 182, 192);
             px[6 * w + x] = RGB(130, 136, 146);
         }
-        // Glowing lamp head
         for (int y = 6; y <= 9; ++y) {
             for (int x = 1; x <= 5; ++x) {
                 px[y * w + x] = RGB(255, 245, 160);
@@ -203,14 +240,12 @@ void buildSpriteAtlas(SpriteAtlas& atlas) {
     {
         int w = 48, h = 40;
         uint32_t* px = allocSprite(SPR_SIGN, w, h, 900.0f, 750.0f);
-        // Two support posts
         for (int y = 26; y < h; ++y) {
             for (int dx = 0; dx < 3; ++dx) {
                 px[y * w + 10 + dx] = RGB(120, 124, 132);
                 px[y * w + w - 13 + dx] = RGB(120, 124, 132);
             }
         }
-        // Billboard frame and vibrant racing graphic
         for (int y = 2; y < 27; ++y) {
             for (int x = 2; x < w - 2; ++x) {
                 bool border = (y <= 3 || y >= 25 || x <= 3 || x >= w - 4);
@@ -218,7 +253,7 @@ void buildSpriteAtlas(SpriteAtlas& atlas) {
                     px[y * w + x] = RGB(240, 240, 245);
                 } else {
                     bool stripe = ((x + y * 2) / 6) % 2 == 0;
-                    px[y * w + x] = stripe ? RGB(220, 36, 48) : RGB(28, 72, 190);
+                    px[y * w + x] = stripe ? RGB(230, 42, 60) : RGB(24, 82, 205);
                 }
             }
         }
@@ -241,41 +276,46 @@ void buildSpriteAtlas(SpriteAtlas& atlas) {
         computeRowBounds(atlas.img[SPR_ROCK]);
     }
 
-    // 7..9. Cars (40 x 32, 520 x 416 wu)
+    // 7..9. Modern Sports Cars (40 x 32, 520 x 416 wu)
     {
         uint32_t* pxRed = allocSprite(SPR_CAR_RED, 40, 32, 520.0f, 416.0f);
-        drawCarSprite(pxRed, 40, 32, RGB(220, 32, 40), RGB(140, 18, 24), RGB(255, 95, 95));
+        drawCarSprite(pxRed, 40, 32, RGB(225, 34, 46), RGB(135, 16, 24), RGB(255, 110, 110));
         computeRowBounds(atlas.img[SPR_CAR_RED]);
 
         uint32_t* pxBlue = allocSprite(SPR_CAR_BLUE, 40, 32, 520.0f, 416.0f);
-        drawCarSprite(pxBlue, 40, 32, RGB(36, 108, 230), RGB(20, 62, 145), RGB(105, 168, 255));
+        drawCarSprite(pxBlue, 40, 32, RGB(34, 118, 240), RGB(18, 60, 145), RGB(115, 180, 255));
         computeRowBounds(atlas.img[SPR_CAR_BLUE]);
 
         uint32_t* pxYellow = allocSprite(SPR_CAR_YELLOW, 40, 32, 520.0f, 416.0f);
-        drawCarSprite(pxYellow, 40, 32, RGB(238, 190, 24), RGB(165, 124, 12), RGB(255, 230, 100));
+        drawCarSprite(pxYellow, 40, 32, RGB(242, 192, 24), RGB(165, 120, 10), RGB(255, 235, 110));
         computeRowBounds(atlas.img[SPR_CAR_YELLOW]);
     }
 
     // 10. SPR_TRUCK (48 x 56, 640 x 750 wu)
     {
         int w = 48, h = 56;
-        uint32_t* px = allocSprite(SPR_TRUCK, w, h, 640.0f, 750.0f);
-        // Dual tyres
-        for (int y = h - 10; y < h; ++y) {
-            for (int x = 4; x < 13; ++x) px[y * w + x] = RGB(24, 24, 28);
-            for (int x = w - 13; x < w - 4; ++x) px[y * w + x] = RGB(24, 24, 28);
+        uint32_t* px = allocSprite(SPR_TRUCK, 48, 56, 640.0f, 750.0f);
+        // Contact shadow & dual tyres
+        for (int y = h - 3; y < h; ++y) {
+            for (int x = 3; x < w - 3; ++x) px[y * w + x] = RGB(18, 20, 24);
         }
-        // Box trailer container
+        for (int y = h - 10; y < h - 1; ++y) {
+            for (int x = 4; x < 13; ++x) px[y * w + x] = RGB(24, 26, 30);
+            for (int x = w - 13; x < w - 4; ++x) px[y * w + x] = RGB(24, 26, 30);
+        }
+        // Ribbed metallic container trailer
         for (int y = 3; y < h - 8; ++y) {
             for (int x = 3; x < w - 3; ++x) {
                 bool frame = (x == 3 || x == w - 4 || y == 3 || y == h - 9 || x == w / 2);
-                px[y * w + x] = frame ? RGB(150, 158, 170) : RGB(212, 218, 226);
+                bool rib   = (y % 4 == 0);
+                px[y * w + x] = frame ? RGB(130, 140, 155)
+                              : (rib ? RGB(190, 198, 210) : RGB(216, 222, 232));
             }
         }
-        // Warning chevron bumper & tail lights
+        // High-visibility hazard chevron bumper & LED tail lamps
         for (int y = h - 13; y < h - 9; ++y) {
             for (int x = 5; x < w - 5; ++x) {
-                px[y * w + x] = (((x + y) / 3) & 1) ? RGB(230, 50, 40) : RGB(245, 245, 245);
+                px[y * w + x] = (((x + y) / 3) & 1) ? RGB(240, 45, 40) : RGB(245, 245, 250);
             }
         }
         computeRowBounds(atlas.img[SPR_TRUCK]);
@@ -341,7 +381,6 @@ void buildDrawList(const Track& track, const Car* cars, int carCount,
         ds.flip  = flip;
     };
 
-    // Far -> near iteration over segments
     for (int n = SPRITE_DIST - 1; n >= 0; --n) {
         const Segment& seg = track.segs[(ctx.baseSeg + n) % count];
         for (int k = 0; k < seg.sceneryCount; ++k) {

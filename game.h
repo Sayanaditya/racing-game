@@ -25,6 +25,7 @@ enum class ScreenState : uint8_t {
     Countdown,
     Racing,
     Paused,
+    Wrecked,
     RaceOver
 };
 
@@ -50,7 +51,12 @@ public:
     // Menu & game flow controls
     void enterLaunchMenu();
     void startNewRace();
+    void repairAndContinue();
+    void fieldRepair();
     void selectTrack(int presetIdx);
+    void selectCar(int carIdx);
+    void selectTrafficDensity(int densityIdx);
+    void toggleSteerAssist();
     void menuMove(int delta);
     void menuAdjust(int dir, bool& outToggleFullscreen, bool& outQuit);
     void menuActivate(bool& outToggleFullscreen, bool& outQuit);
@@ -67,6 +73,7 @@ public:
     void toggleWipers() { wipersOn = !wipersOn; }
     void toggleWeather() { weatherMode = (weatherMode + 1) % 3; }
     void toggleMinimap() { gpsMode = (gpsMode + 1) % 3; }
+    void toggleGapGuide() { showGapGuide = !showGapGuide; }
     void cyclePixelSize(int dir);
     void setPixelSizePreset(int presetIdx);
     void cycleScaleMode() { scaleMode = static_cast<ScaleMode>((static_cast<int>(scaleMode) + 1) % 3); }
@@ -93,6 +100,10 @@ public:
     bool        isFullscreen    = false;
 
     int         selectedTrack   = 0;
+    int         selectedCar     = 0;
+    int         selectedDensity = 1;      // 0 = Low, 1 = Medium (default gameplay), 2 = High
+    bool        steerAssistOn   = false;  // OFF by default so car doesn't auto-turn unless enabled
+    bool        showGapGuide    = true;   // AR Passing-Gap & Trajectory Rails on road
     int         menuCursor      = 0;
     int         pauseCursor     = 0;
     int         pixelSizeIdx    = 0;      // 0=1px(960x720), 1=2px(480x360), 2=3px(320x240), 3=4px(240x180), 4=6px(160x120)
@@ -109,6 +120,7 @@ public:
     float       raceMaxSpeedKmh = 0.0f;
     int         racePosition    = 25;
     int         lastCheckpointSeg = -1;
+    int         lastNearMisses  = 0;
     bool        newHighScoreAchieved = false;
     bool        newBestLapAchieved   = false;
 
@@ -118,7 +130,7 @@ public:
     float       bannerTimer     = 0.0f;
 
     bool        paused          = false;
-    bool        testMode        = false;  // when true, omits extra interactive HUD banners for exact golden hash checks
+    bool        testMode        = false;  // when true, runs exact blueprint configuration for unit tests
     bool        showDebugHud    = false;  // F3 toggle
     bool        showMirror      = true;   // V toggle
     int         gpsMode         = 0;      // 0 = Rotating Radar + Overview, 1 = Large Radar, 2 = Off (Tab toggle)
@@ -128,15 +140,19 @@ public:
 
 private:
     void triggerBanner(const char* txt, uint32_t col, float duration = 1.8f);
+    void drawRoadHeadlightsAndSheen();
     void draw3DCheckpointArches();
     void drawRearViewMirror();
     void drawWeatherAndWipers();
     void drawHudOverlay();
+    void renderArPassingGapAndTargets();
+    void renderModernCockpitDetails();
     void renderHighResHudAndGps();
     void renderGpsMap(int boxX, int boxY, int boxW, int boxH, bool rotatingRadar);
     void renderRallyCallout();
     void renderLaunchScreen();
     void renderCountdownOverlay();
     void renderPauseOverlay();
+    void renderWreckedOverlay();
     void renderRaceOverOverlay();
 };
