@@ -84,12 +84,12 @@ CMakeFiles/racer.dir/all: CMakeFiles/racer_autogen_timestamp_deps.dir/all
 CMakeFiles/racer.dir/all: CMakeFiles/racer_autogen.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/racer.dir/build.make CMakeFiles/racer.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/racer.dir/build.make CMakeFiles/racer.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19 "Built target racer"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20 "Built target racer"
 .PHONY : CMakeFiles/racer.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/racer.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles 20
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles 21
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/racer.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles 0
 .PHONY : CMakeFiles/racer.dir/rule
@@ -136,7 +136,7 @@ CMakeFiles/racer_autogen_timestamp_deps.dir/clean:
 CMakeFiles/racer_autogen.dir/all: CMakeFiles/racer_autogen_timestamp_deps.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/racer_autogen.dir/build.make CMakeFiles/racer_autogen.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/racer_autogen.dir/build.make CMakeFiles/racer_autogen.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles --progress-num=20 "Built target racer_autogen"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles --progress-num=21 "Built target racer_autogen"
 .PHONY : CMakeFiles/racer_autogen.dir/all
 
 # Build rule for subdir invocation for target.

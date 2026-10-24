@@ -1597,6 +1597,8 @@ racer_autogen/timestamp: \
 	/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/jobs.cpp \
 	/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/jobs.h \
 	/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/main.cpp \
+	/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/raster3d.cpp \
+	/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/raster3d.h \
 	/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/roadrender.cpp \
 	/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/roadrender.h \
 	/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/spanfill_avx2.cpp \

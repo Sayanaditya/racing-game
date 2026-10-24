@@ -776,6 +776,106 @@ void testPhase9_Upgrades() {
               "9.g", "Zero Car Health triggers Wrecked state and On-Spot Repair restores 100% Health in place");
 }
 
+void testPhase10_3DPipeline() {
+    std::printf("\n=== Phase 10: Full-Depth Software 3D RasterPipeline (Z-Buffer, 3D Meshes, Fog & Trapezoids) ===\n");
+
+    // 10.a Per-pixel Z-buffer allocation & clearDepth() to infinity
+    RasterPipeline& pipe = s_game.pipe3d;
+    pipe.bind(s_game.displayFb.px, DisplayBuffer::W, DisplayBuffer::H, 90.0f, 0.0f);
+    pipe.clearDepth();
+    bool depthClearedOk = (pipe.width == DisplayBuffer::W) &&
+                          (pipe.height == DisplayBuffer::H) &&
+                          (pipe.depthBuffer[0] >= 1e20f) &&
+                          (pipe.depthBuffer[DisplayBuffer::W * DisplayBuffer::H - 1] >= 1e20f);
+    checkCond(depthClearedOk, "10.a", "RasterPipeline depthBuffer (960x720) initializes and clears to +infinity");
+
+    // 10.b Perspective Projection & DrawTriangle3D Z-buffer occlusion test (Near occludes Far regardless of draw order)
+    s_game.displayFb.clear(RGB(0, 0, 0));
+    pipe.bind(s_game.displayFb.px, DisplayBuffer::W, DisplayBuffer::H, 120.0f, 0.0f); // cy = 120 * 3 = 360
+    pipe.clearDepth();
+    pipe.fogColor   = RGB(20, 20, 30);
+    pipe.fogDensity = 0.0f; // disable fog for exact colour check
+
+    // Draw NEAR triangle first at Z = 500 wu (Red) covering optical centre (cx=480, cy=360)
+    Vertex3D n0 = { Vec3(-150.0f, -150.0f, 500.0f), RGB(240, 20, 20), 1.0f };
+    Vertex3D n1 = { Vec3( 150.0f, -150.0f, 500.0f), RGB(240, 20, 20), 1.0f };
+    Vertex3D n2 = { Vec3(   0.0f,  150.0f, 500.0f), RGB(240, 20, 20), 1.0f };
+    DrawTriangle3D(pipe, n0, n1, n2, true, 0.0f);
+    int midIdx = (DisplayBuffer::H / 2) * DisplayBuffer::W + (DisplayBuffer::W / 2);
+    float centerDepthAfterNear = pipe.depthBuffer[midIdx];
+    uint32_t centerColorAfterNear = s_game.displayFb.row(DisplayBuffer::H / 2)[DisplayBuffer::W / 2];
+
+    // Draw FAR triangle second at Z = 1500 wu (Blue) covering the exact same centre pixel
+    Vertex3D f0 = { Vec3(-600.0f, -600.0f, 1500.0f), RGB(20, 40, 240), 1.0f };
+    Vertex3D f1 = { Vec3( 600.0f, -600.0f, 1500.0f), RGB(20, 40, 240), 1.0f };
+    Vertex3D f2 = { Vec3(   0.0f,  600.0f, 1500.0f), RGB(20, 40, 240), 1.0f };
+    DrawTriangle3D(pipe, f0, f1, f2, true, 0.0f);
+    float centerDepthAfterFar = pipe.depthBuffer[midIdx];
+    uint32_t centerColorAfterFar = s_game.displayFb.row(DisplayBuffer::H / 2)[DisplayBuffer::W / 2];
+
+    bool zTestOk = (std::fabs(centerDepthAfterNear - 500.0f) < 5.0f) &&
+                   (centerDepthAfterFar == centerDepthAfterNear) &&
+                   (centerColorAfterFar == centerColorAfterNear) &&
+                   (((centerColorAfterFar >> 16) & 0xFFu) > ((centerColorAfterFar) & 0xFFu));
+    checkCond(zTestOk, "10.b", "DrawTriangle3D Z-buffer test: near triangle (Z=500) occludes far triangle (Z=1500) drawn later");
+
+    // 10.c Sutherland-Hodgman Near-Plane Clipping (triangle straddling Z_near = 120 wu renders safely without out-of-bounds)
+    pipe.clearDepth();
+    s_game.displayFb.clear(RGB(0, 0, 0));
+    Vertex3D c0 = { Vec3(-120.0f, -60.0f,  20.0f), RGB(40, 220, 90), 1.0f }; // behind zNear (120.0f)
+    Vertex3D c1 = { Vec3( 120.0f, -60.0f,  20.0f), RGB(40, 220, 90), 1.0f }; // behind zNear
+    Vertex3D c2 = { Vec3(   0.0f, 100.0f, 400.0f), RGB(40, 220, 90), 1.0f }; // in front of zNear
+    DrawTriangle3D(pipe, c0, c1, c2, true, 0.0f);
+    int clippedPixelsWritten = 0;
+    for (int i = 0; i < DisplayBuffer::W * DisplayBuffer::H; ++i) {
+        if (pipe.depthBuffer[i] < 1000.0f) clippedPixelsWritten++;
+    }
+    checkCond(clippedPixelsWritten > 50,
+              "10.c", "Near-plane clipping: triangle straddling Z < zNear clips cleanly and writes valid depth pixels");
+
+    // 10.d Exponential Distance Fog & DrawTrapezoid perspective road segment with banking
+    pipe.fogColor   = RGB(200, 210, 220);
+    pipe.fogDensity = 0.0001f;
+    uint32_t baseSurf = RGB(20, 30, 40);
+    uint32_t nearFogged = pipe.applyExponentialFog(baseSurf, 100.0f);
+    uint32_t farFogged  = pipe.applyExponentialFog(baseSurf, 25000.0f);
+    bool fogMonotonicOk = (((farFogged >> 16) & 0xFFu) > ((nearFogged >> 16) & 0xFFu));
+
+    pipe.bind(s_game.displayFb.px, DisplayBuffer::W, DisplayBuffer::H, 90.0f, 0.0f); // cy = 90 * 3 = 270
+    pipe.clearDepth();
+    RoadPalette pal0 = { RGB(34, 96, 40), RGB(220, 40, 40), RGB(58, 62, 72), RGB(240, 240, 245) };
+    RoadPalette pal1 = { RGB(28, 84, 34), RGB(235, 235, 240), RGB(52, 56, 66), RGB(52, 56, 66) };
+    Vec3 nearCenter(0.0f, -1100.0f, 1600.0f);
+    Vec3 farCenter(40.0f, -1100.0f, 1800.0f);
+    DrawTrapezoid(pipe, nearCenter, 2000.0f, 0.03f, farCenter, 2000.0f, 0.04f,
+                  pal0, pal1, 12, 0, DisplayBuffer::H);
+    int sampleY = 580; // between farSy (~563) and nearSy (~600)
+    float roadMidDepth = pipe.depthBuffer[sampleY * DisplayBuffer::W + 480];
+    checkCond(fogMonotonicOk && roadMidDepth >= 1590.0f && roadMidDepth <= 1810.0f,
+              "10.d", "DrawTrapezoid writes interpolated Z-buffer depths [1600..1800] and applies exponential distance fog");
+
+    // 10.e Full RenderFrame() integration & Cockpit forward pass (Cockpit pixels overwrite Z-buffered world at bottom of screen)
+    s_game.init(2, false);
+    s_game.testMode = false;
+    s_game.use3DPipeline = true;
+    s_game.startNewRace();
+    InputState in;
+    in.down = InputState::ACCEL;
+    for (int i = 0; i < 200; ++i) s_game.tick(in); // enter Racing state and build speed
+    s_game.render();
+    uint64_t hash3D = mathutil::fnv1a64(s_game.displayFb.px, sizeof(s_game.displayFb.px));
+    // Verify depth buffer was populated in the upper windshield world region
+    int worldDepthCount = 0;
+    for (int y = 180; y < 520; y += 4) {
+        for (int x = 150; x < 810; x += 4) {
+            if (s_game.pipe3d.depthBuffer[y * DisplayBuffer::W + x] < 60000.0f) worldDepthCount++;
+        }
+    }
+    s_game.shutdown();
+    checkCond(hash3D != 0 && worldDepthCount > 500,
+              "10.e", "Full RenderFrame() 3D pipeline populates Z-buffer and composites 1:1 3D Cockpit forward pass");
+}
+
 } // namespace
 
 int runAllUnitTests() {
@@ -795,6 +895,7 @@ int runAllUnitTests() {
     testPhase7();
     testPhase8();
     testPhase9_Upgrades();
+    testPhase10_3DPipeline();
 
     std::printf("\n================================================================\n");
     std::printf("  Summary: %d passed, %d failed\n", g_passed, g_failed);

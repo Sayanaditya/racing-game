@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ArgonRacer VERSION 2.0.0 LANGUAGES CXX)
+project(ArgonRacer VERSION 3.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,6 +20,7 @@ set(CORE_SOURCES
     audio.cpp
     jobs.cpp
     highscores.cpp
+    raster3d.cpp
     game.cpp
     gamewidget.cpp
     tests.cpp

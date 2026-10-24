@@ -11,6 +11,7 @@
 #include "vehicle.h"
 #include "jobs.h"
 #include "highscores.h"
+#include "raster3d.h"
 
 struct StageTimers {
     FrameStats tickUs;
@@ -57,6 +58,7 @@ public:
     void selectCar(int carIdx);
     void selectTrafficDensity(int densityIdx);
     void toggleSteerAssist();
+    void toggle3DPipeline();
     void menuMove(int delta);
     void menuAdjust(int dir, bool& outToggleFullscreen, bool& outQuit);
     void menuActivate(bool& outToggleFullscreen, bool& outQuit);
@@ -80,6 +82,8 @@ public:
 
     alignas(64) Framebuffer    fb;
     alignas(64) DisplayBuffer  displayFb;
+    alignas(64) DisplayBuffer  cockpitFb;     // scratch buffer for 1:1 cockpit forward-pass layering
+    alignas(64) RasterPipeline pipe3d;        // Per-pixel Z-buffered 3D software graphics pipeline
     alignas(64) RenderContext  ctx;
     alignas(64) Track          track;
     alignas(64) SpriteAtlas    atlas;
@@ -103,6 +107,7 @@ public:
     int         selectedCar     = 0;
     int         selectedDensity = 1;      // 0 = Low, 1 = Medium (default gameplay), 2 = High
     bool        steerAssistOn   = false;  // OFF by default so car doesn't auto-turn unless enabled
+    bool        use3DPipeline   = true;   // Full-Depth 3D Z-Buffer Mesh Pipeline ON by default
     bool        showGapGuide    = true;   // AR Passing-Gap & Trajectory Rails on road
     int         menuCursor      = 0;
     int         pauseCursor     = 0;
@@ -140,6 +145,7 @@ public:
 
 private:
     void triggerBanner(const char* txt, uint32_t col, float duration = 1.8f);
+    void compositeCockpitForwardPass();
     void drawRoadHeadlightsAndSheen();
     void draw3DCheckpointArches();
     void drawRearViewMirror();

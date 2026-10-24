@@ -47,13 +47,13 @@
 			{
 				"command" : 0,
 				"file" : 0,
-				"line" : 28,
+				"line" : 30,
 				"parent" : 0
 			},
 			{
 				"command" : 1,
 				"file" : 0,
-				"line" : 31,
+				"line" : 33,
 				"parent" : 0
 			},
 			{
@@ -209,7 +209,7 @@
 			{
 				"command" : 7,
 				"file" : 0,
-				"line" : 36,
+				"line" : 38,
 				"parent" : 0
 			},
 			{
@@ -231,7 +231,7 @@
 			{
 				"command" : 10,
 				"file" : 0,
-				"line" : 30,
+				"line" : 32,
 				"parent" : 0
 			}
 		]
@@ -392,7 +392,9 @@
 				12,
 				13,
 				14,
-				15
+				15,
+				16,
+				17
 			]
 		}
 	],
@@ -518,21 +520,23 @@
 				12,
 				13,
 				14,
-				15
+				15,
+				16,
+				17
 			]
 		},
 		{
 			"name" : "",
 			"sourceIndexes" : 
 			[
-				16
+				18
 			]
 		},
 		{
 			"name" : "CMake Rules",
 			"sourceIndexes" : 
 			[
-				17
+				19
 			]
 		}
 	],
@@ -609,6 +613,18 @@
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
 			"path" : "jobs.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "highscores.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "raster3d.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{

@@ -1272,6 +1272,7 @@
   /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/highscores.h \
   /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/input.h \
   /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/jobs.h \
+  /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/raster3d.h \
   /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/roadrender.h \
   /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/sprites.h \
   /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/track.h \

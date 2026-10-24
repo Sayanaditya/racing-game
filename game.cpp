@@ -46,8 +46,9 @@ void Game::init(int workerCount, bool forceScalar) {
 
     selectedTrack   = 0;
     selectedCar     = 0;
-    selectedDensity = 1; // Medium traffic congestion by default in interactive mode
+    selectedDensity = 1;
     steerAssistOn   = false;
+    use3DPipeline   = true;
     showGapGuide    = true;
 
     buildDemoTrack(track);
@@ -62,6 +63,9 @@ void Game::init(int workerCount, bool forceScalar) {
 
     fb.clear(0xFF000000u);
     displayFb.clear(0xFF000000u);
+    cockpitFb.clear(0xFF000000u);
+    pipe3d.bind(displayFb.px, DisplayBuffer::W, DisplayBuffer::H, cfg::HORIZON_BASE, 0.0f);
+    pipe3d.clearDepth();
 
     tickCount       = 0;
     paused          = false;
@@ -130,6 +134,12 @@ void Game::toggleSteerAssist() {
     vehicle.steerAssist = steerAssistOn;
     triggerBanner(steerAssistOn ? "STEER ASSIST (ADAS): ON" : "STEER ASSIST: OFF (MANUAL)",
                   steerAssistOn ? RGB(80, 255, 150) : RGB(255, 190, 60), 1.8f);
+}
+
+void Game::toggle3DPipeline() {
+    use3DPipeline = !use3DPipeline;
+    triggerBanner(use3DPipeline ? "3D Z-BUFFER MESH PIPELINE: ON" : "CLASSIC 2.5D BILLBOARD MODE",
+                  use3DPipeline ? RGB(0, 245, 255) : RGB(255, 210, 70), 1.8f);
 }
 
 void Game::selectTrack(int presetIdx) {
@@ -309,8 +319,8 @@ void Game::menuActivate(bool& outToggleFullscreen, bool& outQuit) {
 
 void Game::handleMouseMove(int normX960, int normY720) {
     if (screenState == ScreenState::LaunchMenu) {
-        if (normX960 >= 45 && normX960 <= 510 && normY720 >= 224 && normY720 < 224 + LAUNCH_MENU_ITEMS * 41) {
-            int idx = (normY720 - 224) / 41;
+        if (normX960 >= 45 && normX960 <= 510 && normY720 >= 216 && normY720 < 216 + LAUNCH_MENU_ITEMS * 41) {
+            int idx = (normY720 - 216) / 41;
             if (idx >= 0 && idx < LAUNCH_MENU_ITEMS) menuCursor = idx;
         }
     } else if (screenState == ScreenState::Paused) {
@@ -324,7 +334,7 @@ void Game::handleMouseMove(int normX960, int normY720) {
 void Game::handleMouseClick(int normX960, int normY720, bool& outToggleFullscreen, bool& outQuit) {
     handleMouseMove(normX960, normY720);
     if (screenState == ScreenState::LaunchMenu) {
-        if (normX960 >= 45 && normX960 <= 510 && normY720 >= 224 && normY720 < 224 + LAUNCH_MENU_ITEMS * 41) {
+        if (normX960 >= 45 && normX960 <= 510 && normY720 >= 216 && normY720 < 216 + LAUNCH_MENU_ITEMS * 41) {
             menuActivate(outToggleFullscreen, outQuit);
         }
     } else if (screenState == ScreenState::Paused) {
@@ -464,7 +474,6 @@ void Game::tick(const InputState& in) {
         float spdKmh = vehicle.speed * cfg::KMH_PER_WU;
         raceMaxSpeedKmh = std::max(raceMaxSpeedKmh, spdKmh);
 
-        // Transition to Wrecked screen when Car Health hits 0%
         if (vehicle.wrecked || vehicle.health <= 0.0f) {
             vehicle.health  = 0.0f;
             vehicle.wrecked = true;
@@ -473,7 +482,6 @@ void Game::tick(const InputState& in) {
             return;
         }
 
-        // Collision damage notification
         if (vehicle.health < prevHealth - 1.0f) {
             comboMult  = 1;
             comboTimer = 0.0f;
@@ -483,7 +491,6 @@ void Game::tick(const InputState& in) {
             triggerBanner(msg, (vehicle.health < 30.0f) ? RGB(255, 55, 55) : RGB(255, 165, 50), 1.6f);
         }
 
-        // Near-miss & Overtake Combo scoring
         int newPasses = vehicle.overtakes - prevOvertakes;
         int newNear   = vehicle.nearMisses - lastNearMisses;
         lastNearMisses = vehicle.nearMisses;
@@ -509,7 +516,6 @@ void Game::tick(const InputState& in) {
             if (comboTimer <= 0.0f) comboMult = 1;
         }
 
-        // Continuous speed & slipstream score accumulation
         if (vehicle.state == CrashState::Driving && vehicle.speed > 1000.0f) {
             float spdFrac = vehicle.speed / cfg::MAX_SPEED;
             float draftBonus = 1.0f + 0.5f * vehicle.drafting;
@@ -521,7 +527,6 @@ void Game::tick(const InputState& in) {
             }
         }
 
-        // Checkpoint detection: +Time, +Score, and +25% Pit Repair Health!
         int curSeg = (track.count > 0)
             ? (static_cast<int>(std::floor(mathutil::wrap(vehicle.z, track.length) / cfg::SEG_LEN)) % track.count)
             : 0;
@@ -549,7 +554,6 @@ void Game::tick(const InputState& in) {
             lastCheckpointSeg = curSeg;
         }
 
-        // Lap completion handling
         if (vehicle.lap > prevLap) {
             score += 5000u;
             bool newHS = false, newBL = false;
@@ -599,6 +603,59 @@ void Game::tick(const InputState& in) {
     timers.tickUs.push(std::chrono::duration<float, std::micro>(t1 - t0).count());
 }
 
+void Game::compositeCockpitForwardPass() {
+    // Render cockpit interior, cracks, wipers, gauges, and rear-view mirror in a distinct forward pass
+    // with depth testing disabled (maintaining 1:1 screen-space fidelity over the 3D Z-buffered world).
+    constexpr uint32_t KEY_TRANSPARENT = 0xFF01FE02u;
+    fb.clear(KEY_TRANSPARENT);
+
+    if (weatherMode != 0 || wipersOn || vehicle.nitroActive) {
+        drawWeatherAndWipers();
+    }
+    cockpit.drawCracks(fb);
+    cockpit.drawFrame(fb);
+    cockpit.drawGauges(fb);
+
+    if (screenState != ScreenState::LaunchMenu) {
+        if (showMirror) {
+            drawRearViewMirror();
+        }
+        drawHudOverlay();
+    }
+
+    // Upscale cockpit layer and composite non-transparent pixels onto displayFb
+    for (int y = 0; y < Framebuffer::H; ++y) {
+        const uint32_t* sRow = fb.row(y);
+        uint32_t* d0 = displayFb.row(y * 3);
+        uint32_t* d1 = displayFb.row(y * 3 + 1);
+        uint32_t* d2 = displayFb.row(y * 3 + 2);
+        for (int x = 0; x < Framebuffer::W; ++x) {
+            uint32_t c = sRow[x];
+            if (c != KEY_TRANSPARENT) {
+                int dx = x * 3;
+                d0[dx] = d0[dx + 1] = d0[dx + 2] = c;
+                d1[dx] = d1[dx + 1] = d1[dx + 2] = c;
+                d2[dx] = d2[dx + 1] = d2[dx + 2] = c;
+            } else if (y >= 14 && y <= 37) {
+                // Apply windshield top sun-visor tint directly onto the 960x720 3D world rows
+                int dx = x * 3;
+                for (int ry = 0; ry < 3; ++ry) {
+                    uint32_t* dRow = displayFb.row(y * 3 + ry);
+                    for (int rx = 0; rx < 3; ++rx) {
+                        uint32_t wc = dRow[dx + rx];
+                        dRow[dx + rx] = (y <= 25)
+                            ? (0xFF000000u | (wc - ((wc >> 2) & 0x003F3F3Fu)))
+                            : (0xFF000000u | (wc - ((wc >> 3) & 0x001F1F1Fu)));
+                    }
+                }
+            }
+        }
+    }
+
+    // Render high-resolution 3D-shaded instrument binnacle, beveled gauges & flat-bottom GT wheel
+    RenderCockpit3D(pipe3d, vehicle, cockpit, getCarSpec(selectedCar), wipersOn, wiperPhase, weatherMode);
+}
+
 void Game::render() {
     auto frameStart = std::chrono::steady_clock::now();
 
@@ -609,72 +666,91 @@ void Game::render() {
     auto tA1 = std::chrono::steady_clock::now();
     timers.passAUs.push(std::chrono::duration<float, std::micro>(tA1 - tA0).count());
 
-    // 2. Rasterize (Pass B + sprites + visor tint in parallel row slices)
-    auto tB0 = std::chrono::steady_clock::now();
-    FrameJob job{ &ctx, &drawList, &atlas, &track, &cockpit, &fb };
-    scheduler.run(job);
-    auto tB1 = std::chrono::steady_clock::now();
-    timers.passBUs.push(std::chrono::duration<float, std::micro>(tB1 - tB0).count());
+    // Unit test mode or Classic 2.5D mode uses the Phase 1-8 slice scheduler on fb
+    if (testMode || !use3DPipeline) {
+        auto tB0 = std::chrono::steady_clock::now();
+        FrameJob job{ &ctx, &drawList, &atlas, &track, &cockpit, &fb };
+        scheduler.run(job);
+        auto tB1 = std::chrono::steady_clock::now();
+        timers.passBUs.push(std::chrono::duration<float, std::micro>(tB1 - tB0).count());
 
-    // 3. Overlay on 320x240 base Framebuffer
-    auto tO0 = std::chrono::steady_clock::now();
-    if (!testMode) {
-        drawRoadHeadlightsAndSheen();
-        draw3DCheckpointArches();
-        if (weatherMode != 0 || wipersOn || vehicle.nitroActive) {
-            drawWeatherAndWipers();
-        }
-    }
-    cockpit.drawCracks(fb);
-    cockpit.drawFrame(fb);
-    cockpit.drawGauges(fb);
-
-    if (!testMode && screenState != ScreenState::LaunchMenu) {
-        if (showMirror) {
-            drawRearViewMirror();
-        }
-        drawHudOverlay();
-    }
-
-    if (vehicle.fade > 0.01f) {
-        int level = mathutil::clamp(static_cast<int>(std::lround(vehicle.fade * 4.0f)), 1, 4);
-        fadeRows(fb, 0, cfg::SCREEN_H, level);
-    }
-
-    // 4. High-Resolution 960x720 DisplayBuffer Upscale, AR Gap Guide, Cockpit Cluster, GPS & Menus
-    if (!testMode) {
-        displayFb.upscaleFromBase(fb, pixelSize);
-
-        if (screenState == ScreenState::LaunchMenu) {
-            renderLaunchScreen();
-        } else {
-            if (showGapGuide && (screenState == ScreenState::Racing || screenState == ScreenState::Countdown)) {
-                renderArPassingGapAndTargets();
-            }
-            renderModernCockpitDetails();
-            renderHighResHudAndGps();
-
-            if (screenState == ScreenState::Countdown) {
-                renderCountdownOverlay();
-            } else if (screenState == ScreenState::Paused) {
-                renderPauseOverlay();
-            } else if (screenState == ScreenState::Wrecked) {
-                renderWreckedOverlay();
-            } else if (screenState == ScreenState::RaceOver) {
-                renderRaceOverOverlay();
+        auto tO0 = std::chrono::steady_clock::now();
+        if (!testMode) {
+            drawRoadHeadlightsAndSheen();
+            draw3DCheckpointArches();
+            if (weatherMode != 0 || wipersOn || vehicle.nitroActive) {
+                drawWeatherAndWipers();
             }
         }
+        cockpit.drawCracks(fb);
+        cockpit.drawFrame(fb);
+        cockpit.drawGauges(fb);
 
-        displayFb.applyPostProcess(pixelSize, crtScanlines);
+        if (!testMode && screenState != ScreenState::LaunchMenu) {
+            if (showMirror) {
+                drawRearViewMirror();
+            }
+            drawHudOverlay();
+        }
+
+        if (vehicle.fade > 0.01f) {
+            int level = mathutil::clamp(static_cast<int>(std::lround(vehicle.fade * 4.0f)), 1, 4);
+            fadeRows(fb, 0, cfg::SCREEN_H, level);
+        }
+
+        if (!testMode) {
+            displayFb.upscaleFromBase(fb, pixelSize);
+            RenderCockpit3D(pipe3d, vehicle, cockpit, getCarSpec(selectedCar), wipersOn, wiperPhase, weatherMode);
+        }
+        auto tO1 = std::chrono::steady_clock::now();
+        timers.overlayUs.push(std::chrono::duration<float, std::micro>(tO1 - tO0).count());
+        if (testMode) {
+            timers.totalMs.push(std::chrono::duration<float, std::milli>(tO1 - frameStart).count());
+            return;
+        }
+    } else {
+        // Full-Depth 3D Software Raster Pipeline (Z-Buffer, DrawTrapezoid, DrawTriangle3D Meshes, Lambert Shading & Fog)
+        auto tB0 = std::chrono::steady_clock::now();
+        pipe3d.frameTick = tickCount;
+        RenderFrame(pipe3d, track, vehicle, traffic, cam, ctx, cockpit, displayFb);
+        auto tB1 = std::chrono::steady_clock::now();
+        timers.passBUs.push(std::chrono::duration<float, std::micro>(tB1 - tB0).count());
+
+        // Forward-Pass Cockpit / Dash Layering (depth test disabled)
+        auto tO0 = std::chrono::steady_clock::now();
+        compositeCockpitForwardPass();
+        auto tO1 = std::chrono::steady_clock::now();
+        timers.overlayUs.push(std::chrono::duration<float, std::micro>(tO1 - tO0).count());
     }
 
-    auto tO1 = std::chrono::steady_clock::now();
-    timers.overlayUs.push(std::chrono::duration<float, std::micro>(tO1 - tO0).count());
-    timers.totalMs.push(std::chrono::duration<float, std::milli>(tO1 - frameStart).count());
+    // High-Resolution HUD, AR Passing-Gap Rails, 2D GPS & Menus on DisplayBuffer
+    if (screenState == ScreenState::LaunchMenu) {
+        renderLaunchScreen();
+    } else {
+        if (showGapGuide && (screenState == ScreenState::Racing || screenState == ScreenState::Countdown)) {
+            renderArPassingGapAndTargets();
+        }
+        renderModernCockpitDetails();
+        renderHighResHudAndGps();
+
+        if (screenState == ScreenState::Countdown) {
+            renderCountdownOverlay();
+        } else if (screenState == ScreenState::Paused) {
+            renderPauseOverlay();
+        } else if (screenState == ScreenState::Wrecked) {
+            renderWreckedOverlay();
+        } else if (screenState == ScreenState::RaceOver) {
+            renderRaceOverOverlay();
+        }
+    }
+
+    displayFb.applyPostProcess(pixelSize, crtScanlines);
+
+    auto frameEnd = std::chrono::steady_clock::now();
+    timers.totalMs.push(std::chrono::duration<float, std::milli>(frameEnd - frameStart).count());
 }
 
 void Game::drawRoadHeadlightsAndSheen() {
-    // Subtle twin headlight illumination cones on night/sunset tracks + wet road reflection in rain
     if (ctx.theme != 1 && ctx.theme != 2 && weatherMode != 1) return;
     for (int y = 135; y < 185; ++y) {
         const RowInfo& r = ctx.rows[y];
@@ -695,8 +771,7 @@ void Game::drawRoadHeadlightsAndSheen() {
 void Game::renderArPassingGapAndTargets() {
     if (track.count <= 0) return;
 
-    // 1. Scan traffic within 70m ahead to evaluate collision risk & find the widest open passing lane
-    const float playerHW = vphys::PLAYER_HALF_W * vehicle.hitboxScale; // ~0.141
+    const float playerHW = vphys::PLAYER_HALF_W * vehicle.hitboxScale;
     int   threatCarIdx = -1;
     float minThreatDist = 1e9f;
     bool  tightRisk = false;
@@ -717,14 +792,13 @@ void Game::renderArPassingGapAndTargets() {
         }
     }
 
-    uint32_t railCol = RGB(40, 255, 130); // Green = Clear passing corridor
+    uint32_t railCol = RGB(40, 255, 130);
     if (vehicle.drafting > 0.25f && !tightRisk) {
-        railCol = RGB(0, 235, 255);       // Cyan = Slipstream Drafting active
+        railCol = RGB(0, 235, 255);
     } else if (threatCarIdx != -1) {
-        railCol = tightRisk ? RGB(255, 55, 65) : RGB(255, 210, 45); // Red = Blocked, Amber = Tight squeeze
+        railCol = tightRisk ? RGB(255, 55, 65) : RGB(255, 210, 45);
     }
 
-    // 2. Project 3D Bumper-Width Trajectory Rails onto the road ahead (segments n = 4..26)
     const float centerX = (cfg::SCREEN_W * 0.5f) + ctx.shiftX;
     for (int n = 4; n < 24; ++n) {
         const RoadPoint& p0 = ctx.pts[n];
@@ -747,7 +821,6 @@ void Game::renderArPassingGapAndTargets() {
         }
     }
 
-    // 3. Draw 3D Overhead Target Brackets & Open-Gap Direction Arrows on Nearby Traffic
     for (int i = 0; i < cfg::MAX_TRAFFIC; ++i) {
         const Car& c = traffic.cars[i];
         if (!c.active) continue;
@@ -783,16 +856,14 @@ void Game::renderArPassingGapAndTargets() {
                       : (dx < safeLim * 1.45f) ? RGB(255, 210, 50)
                                                : RGB(70, 245, 140);
 
-        // Sleek bracket above car roof
         int bw = std::clamp(wPx960, 44, 150);
         int bx = sx960 - bw / 2;
         displayFb.drawRect(bx, topY, bw, 3, bCol);
         displayFb.drawRect(bx, topY, 3, 10, bCol);
         displayFb.drawRect(bx + bw - 3, topY, 3, 10, bCol);
 
-        // If this car is in our path, show which side has the wider open gap to pass!
         if (i == threatCarIdx && tightRisk) {
-            bool passLeft = (c.offset > 0.0f); // if car is on right side of road, left gap is wider
+            bool passLeft = (c.offset > 0.0f);
             const char* passHint = passLeft ? "<< PASS LEFT" : "PASS RIGHT >>";
             int tw = DisplayBuffer::textWidth(passHint, 2);
             displayFb.drawRectAlpha(sx960 - tw / 2 - 6, topY - 24, tw + 12, 20, RGB(12, 16, 26), 215);
@@ -806,10 +877,9 @@ void Game::renderModernCockpitDetails() {
     const int ox960 = cockpit.ox() * 3;
     const int oy720 = cockpit.oy() * 3;
 
-    // 1. Selected Car Signature Ambient LED Line across dashboard top (y = 576 in 960x720)
     displayFb.drawRect(60 + ox960, 576 + oy720, 840, 3, spec.accentColor);
 
-    // 2. Left-Side Wing Mirror (x = 18..106, y = 450..502)
+    // Left-Side Wing Mirror
     {
         int mx = 16 + ox960, my = 456 + oy720, mw = 86, mh = 48;
         displayFb.drawRect(mx - 3, my - 3, mw + 6, mh + 6, RGB(45, 52, 64));
@@ -818,7 +888,6 @@ void Game::renderModernCockpitDetails() {
         displayFb.drawRect(mx, my + mh / 2, mw, mh / 2, ctx.pal[2][0].road);
         displayFb.drawText(mx + 6, my + 5, "BLIND SPOT", RGB(180, 215, 245), 1, true);
 
-        // Check if any car is close behind on the left/right
         bool blindWarn = false;
         for (int i = 0; i < cfg::MAX_TRAFFIC; ++i) {
             if (!traffic.cars[i].active) continue;
@@ -836,7 +905,7 @@ void Game::renderModernCockpitDetails() {
         }
     }
 
-    // 3. High-Res Car Health & Integrity Display on Left Dashboard Panel (x = 28..148, y = 668..708)
+    // High-Res Car Health & Integrity Display on Left Dashboard Panel
     {
         int hx = 24 + ox960, hy = 668 + oy720, hw = 136, hh = 38;
         displayFb.drawRectAlpha(hx, hy, hw, hh, RGB(10, 14, 22), 230);
@@ -854,19 +923,18 @@ void Game::renderModernCockpitDetails() {
         displayFb.drawRect(hx + 10, hy + 25, std::max(0, barW), 7, hCol);
     }
 
-    // 4. Right Dashboard ADAS / Car Spec / Slipstream Telemetry Panel (x = 800..936, y = 668..708)
+    // Right Dashboard ADAS / Car Spec / 3D Pipeline Telemetry Panel
     {
         int rx = 800 + ox960, ry = 668 + oy720, rw = 136, rh = 38;
         displayFb.drawRectAlpha(rx, ry, rw, rh, RGB(10, 14, 22), 230);
         displayFb.drawBorder(rx, ry, rw, rh, 2, spec.accentColor);
 
         displayFb.drawText(rx + 8, ry + 6, spec.name, spec.accentColor, 1, true);
-        const char* adasTxt = steerAssistOn ? "ADAS: ON [G]" : "ADAS: OFF [G]";
+        const char* adasTxt = steerAssistOn ? "ADAS:ON [G] 3D[E]" : "ADAS:OFF[G] 3D[E]";
         displayFb.drawText(rx + 8, ry + 20, adasTxt,
                            steerAssistOn ? RGB(80, 255, 150) : RGB(195, 205, 225), 1, true);
     }
 
-    // 5. Slipstream Drafting Indicator above centre console when drafting
     if (vehicle.drafting > 0.15f) {
         int dx = 390 + ox960, dy = 528 + oy720, dw = 180, dh = 26;
         displayFb.drawRectAlpha(dx, dy, dw, dh, RGB(8, 22, 38), 220);
@@ -1146,11 +1214,9 @@ void Game::renderHighResHudAndGps() {
     const TrackRecord& rec = highScores.record(selectedTrack);
     uint32_t bestScore = std::max(score, rec.highScore);
 
-    // Top HUD Bar (rows 0..42 in 960x720)
     displayFb.drawRectAlpha(0, 0, DisplayBuffer::W, 42, RGB(10, 14, 22), 215);
     displayFb.drawRect(0, 40, DisplayBuffer::W, 2, RGB(50, 140, 220));
 
-    // 1. Score & High Score (Top Left)
     std::snprintf(buf, sizeof(buf), "SCORE %07u", score);
     displayFb.drawText(14, 12, buf, RGB(255, 255, 255), 2, true);
 
@@ -1158,7 +1224,6 @@ void Game::renderHighResHudAndGps() {
     uint32_t hiCol = newHighScoreAchieved ? RGB(255, 215, 40) : RGB(120, 215, 255);
     displayFb.drawText(195, 12, buf, hiCol, 2, true);
 
-    // 2. Countdown Timer or Mode Status
     if (gameMode == GameMode::ArcadeCheckpoint) {
         uint32_t tCol = (timeLeftSec < 10.0f && ((tickCount / 10) & 1)) ? RGB(255, 60, 60) : RGB(255, 235, 80);
         std::snprintf(buf, sizeof(buf), "TIME %02.1FS", timeLeftSec);
@@ -1174,29 +1239,24 @@ void Game::renderHighResHudAndGps() {
         displayFb.drawText(590, 12, buf, RGB(140, 240, 180), 2, true);
     }
 
-    // 3. Gear, Combo & Overtakes (Top Right)
     std::snprintf(buf, sizeof(buf), "G:%d  %dX  PASS:%d", vehicle.gear, comboMult, vehicle.overtakes);
     displayFb.drawText(760, 12, buf, (comboMult > 1) ? RGB(80, 255, 150) : RGB(230, 235, 245), 2, true);
 
-    // 4. GPS Navigation Display (Top-Right inside windshield)
     if (gpsMode == 0) {
         renderGpsMap(772, 52, 168, 156, true);
     } else if (gpsMode == 1) {
         renderGpsMap(732, 52, 208, 196, false);
     }
 
-    // 5. Turn-by-Turn GPS Rally Callout Banner
     if (screenState == ScreenState::Racing) {
         renderRallyCallout();
     }
 
-    // 6. Track, Repair, Assist & Gap-Guide Status Strip (Top-Left below header)
     const TrackMetadata& meta = getTrackMetadata(selectedTrack);
-    std::snprintf(buf, sizeof(buf), "%s | [H]REPAIR | [G]ASSIST:%s | [T]TRAFFIC | [Q]GAP-GUIDE",
-                  meta.name, steerAssistOn ? "ON" : "OFF");
+    std::snprintf(buf, sizeof(buf), "%s | [E]3D-MESH:%s | [H]REPAIR | [G]ASSIST:%s | [Q]GAP",
+                  meta.name, use3DPipeline ? "ON" : "2.5D", steerAssistOn ? "ON" : "OFF");
     displayFb.drawText(16, 50, buf, RGB(170, 205, 235), 1, true);
 
-    // 7. Floating Event Banner
     if (bannerTimer > 0.0f && bannerText[0] != '\0') {
         int tw = DisplayBuffer::textWidth(bannerText, 3);
         int bx = (DisplayBuffer::W - tw) / 2 - 16;
@@ -1206,31 +1266,29 @@ void Game::renderHighResHudAndGps() {
         displayFb.drawText(bx + 16, by + 9, bannerText, bannerColor, 3, true);
     }
 
-    // 8. F3 Profiler Overlay
     if (showDebugHud) {
         displayFb.drawRectAlpha(16, 68, 360, 130, RGB(12, 16, 26), 220);
         displayFb.drawBorder(16, 68, 360, 130, 2, RGB(80, 190, 255));
         std::snprintf(buf, sizeof(buf), "FRAME %.2FMS (P99 %.2FMS)", timers.totalMs.avg(), timers.totalMs.p99());
         displayFb.drawText(28, 78, buf, RGB(100, 255, 150), 2, true);
-        std::snprintf(buf, sizeof(buf), "TICK:%.0FUS PA:%.0FUS PB:%.0FUS",
+        std::snprintf(buf, sizeof(buf), "TICK:%.0FUS PA:%.0FUS 3D-RAST:%.0FUS",
                       timers.tickUs.avg(), timers.passAUs.avg(), timers.passBUs.avg());
         displayFb.drawText(28, 104, buf, RGB(220, 235, 255), 1, true);
-        std::snprintf(buf, sizeof(buf), "SPRITES:%d WORKERS:%d PIXEL:%dPX",
-                      drawList.count, scheduler.workerCount() + 1, pixelSize);
+        std::snprintf(buf, sizeof(buf), "PIPELINE:%s PIXEL:%dPX",
+                      use3DPipeline ? "3D Z-BUFFER" : "2.5D SLICE", pixelSize);
         displayFb.drawText(28, 120, buf, RGB(220, 235, 255), 1, true);
         for (int s = 0; s < cfg::NUM_SLICES; ++s) {
             int us = static_cast<int>(scheduler.stats[s].ns / 1000u);
             int bw = std::clamp(us, 4, 38);
             displayFb.drawRect(28 + s * 42, 142, bw, 10, RGB(60, 195, 255));
         }
-        displayFb.drawText(28, 164, "F:FULLSCREEN L:SCALE G:ASSIST T:TRAFFIC H:REPAIR", RGB(165, 190, 220), 1, true);
+        displayFb.drawText(28, 164, "E:3D-PIPE F:FULLSCREEN G:ASSIST T:TRAFFIC H:REPAIR", RGB(165, 190, 220), 1, true);
     }
 }
 
 void Game::renderLaunchScreen() {
     displayFb.drawRectAlpha(0, 0, DisplayBuffer::W, DisplayBuffer::H, RGB(8, 12, 24), 155);
 
-    // Top Title Header Card
     displayFb.drawRectAlpha(40, 18, 880, 138, RGB(12, 18, 34), 225);
     displayFb.drawBorder(40, 18, 880, 138, 3, RGB(0, 225, 255));
     displayFb.drawRect(46, 146, 868, 4, RGB(255, 50, 140));
@@ -1239,7 +1297,7 @@ void Game::renderLaunchScreen() {
     int titleW = DisplayBuffer::textWidth(title, 6);
     displayFb.drawText((DisplayBuffer::W - titleW) / 2, 36, title, RGB(0, 245, 255), 6, true);
 
-    const char* sub = "MODERN FIRST-PERSON SOFTWARE-RASTERIZED 3D RACER (QT 6)";
+    const char* sub = "FULL-DEPTH 3D SOFTWARE-RASTERIZED FIRST-PERSON RACER (QT 6)";
     int subW = DisplayBuffer::textWidth(sub, 2);
     displayFb.drawText((DisplayBuffer::W - subW) / 2, 98, sub, RGB(255, 210, 80), 2, true);
 
@@ -1247,7 +1305,6 @@ void Game::renderLaunchScreen() {
     int hintW = DisplayBuffer::textWidth(hint, 1);
     displayFb.drawText((DisplayBuffer::W - hintW) / 2, 126, hint, RGB(180, 205, 235), 1, true);
 
-    // Left Panel: 10 Interactive Menu Options
     displayFb.drawRectAlpha(40, 170, 480, 474, RGB(12, 18, 32), 230);
     displayFb.drawBorder(40, 170, 480, 474, 2, RGB(70, 130, 210));
     displayFb.drawText(60, 182, "GARAGE, TRACK & RACE SETTINGS", RGB(255, 190, 60), 2, true);
@@ -1280,7 +1337,6 @@ void Game::renderLaunchScreen() {
         displayFb.drawText(64, iy + 4, items[i], col, 2, true);
     }
 
-    // Right Panel: Track 2D GPS Circuit Preview, Selected Car Specs & Saved High Scores
     displayFb.drawRectAlpha(535, 170, 385, 474, RGB(12, 18, 32), 230);
     displayFb.drawBorder(535, 170, 385, 474, 2, RGB(70, 130, 210));
 
@@ -1291,7 +1347,6 @@ void Game::renderLaunchScreen() {
 
     renderGpsMap(555, 222, 345, 195, false);
 
-    // Selected Car Spec Bar
     displayFb.drawRect(555, 426, 345, 2, car.accentColor);
     std::snprintf(buf, sizeof(buf), "CAR: %s (%s)", car.name, car.subtitle);
     displayFb.drawText(555, 434, buf, car.accentColor, 1, true);
@@ -1299,7 +1354,6 @@ void Game::renderLaunchScreen() {
                   car.topSpeedKmh, car.armorMult * 100.0f, car.steerMult * 100.0f);
     displayFb.drawText(555, 450, buf, RGB(220, 235, 255), 1, true);
 
-    // Track Hall of Fame Records
     const TrackRecord& rec = highScores.record(selectedTrack);
     displayFb.drawRect(555, 470, 345, 2, RGB(60, 110, 180));
     displayFb.drawText(555, 478, "TRACK HALL OF FAME (SAVED RECORDS)", RGB(255, 120, 190), 2, true);
@@ -1323,10 +1377,9 @@ void Game::renderLaunchScreen() {
     std::snprintf(buf, sizeof(buf), "MOST OVERTAKES : %d CARS", rec.mostOvertakes);
     displayFb.drawText(555, 590, buf, RGB(220, 195, 255), 2, true);
 
-    // Bottom Controls Strip
     displayFb.drawRectAlpha(40, 656, 880, 44, RGB(12, 18, 32), 230);
     displayFb.drawBorder(40, 656, 880, 44, 2, RGB(60, 110, 180));
-    const char* ctl = "WASD/ARROWS: DRIVE | SPACE: NITRO | H: REPAIR | G: STEER ASSIST | T: TRAFFIC | Q: GAP GUIDE | F: FULLSCREEN";
+    const char* ctl = "WASD/ARROWS: DRIVE | SPACE: NITRO | E: 3D PIPELINE | H: REPAIR | G: ASSIST | T: TRAFFIC | F: FULLSCREEN";
     int ctlW = DisplayBuffer::textWidth(ctl, 1);
     displayFb.drawText((DisplayBuffer::W - ctlW) / 2, 674, ctl, RGB(210, 230, 255), 1, true);
 }

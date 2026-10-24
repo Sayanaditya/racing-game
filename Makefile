@@ -14,6 +14,7 @@ CORE_SRCS := \
 	audio.cpp \
 	jobs.cpp \
 	highscores.cpp \
+	raster3d.cpp \
 	game.cpp \
 	tests.cpp \
 	main.cpp

@@ -257,10 +257,24 @@ CMakeFiles/racer.dir/highscores.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/racer.dir/highscores.cpp.s"
 	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/highscores.cpp -o CMakeFiles/racer.dir/highscores.cpp.s
 
+CMakeFiles/racer.dir/raster3d.cpp.o: CMakeFiles/racer.dir/flags.make
+CMakeFiles/racer.dir/raster3d.cpp.o: /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/raster3d.cpp
+CMakeFiles/racer.dir/raster3d.cpp.o: CMakeFiles/racer.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object CMakeFiles/racer.dir/raster3d.cpp.o"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/racer.dir/raster3d.cpp.o -MF CMakeFiles/racer.dir/raster3d.cpp.o.d -o CMakeFiles/racer.dir/raster3d.cpp.o -c /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/raster3d.cpp
+
+CMakeFiles/racer.dir/raster3d.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/racer.dir/raster3d.cpp.i"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/raster3d.cpp > CMakeFiles/racer.dir/raster3d.cpp.i
+
+CMakeFiles/racer.dir/raster3d.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/racer.dir/raster3d.cpp.s"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/raster3d.cpp -o CMakeFiles/racer.dir/raster3d.cpp.s
+
 CMakeFiles/racer.dir/game.cpp.o: CMakeFiles/racer.dir/flags.make
 CMakeFiles/racer.dir/game.cpp.o: /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/game.cpp
 CMakeFiles/racer.dir/game.cpp.o: CMakeFiles/racer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object CMakeFiles/racer.dir/game.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object CMakeFiles/racer.dir/game.cpp.o"
 	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/racer.dir/game.cpp.o -MF CMakeFiles/racer.dir/game.cpp.o.d -o CMakeFiles/racer.dir/game.cpp.o -c /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/game.cpp
 
 CMakeFiles/racer.dir/game.cpp.i: cmake_force
@@ -274,7 +288,7 @@ CMakeFiles/racer.dir/game.cpp.s: cmake_force
 CMakeFiles/racer.dir/gamewidget.cpp.o: CMakeFiles/racer.dir/flags.make
 CMakeFiles/racer.dir/gamewidget.cpp.o: /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/gamewidget.cpp
 CMakeFiles/racer.dir/gamewidget.cpp.o: CMakeFiles/racer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object CMakeFiles/racer.dir/gamewidget.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_17) "Building CXX object CMakeFiles/racer.dir/gamewidget.cpp.o"
 	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/racer.dir/gamewidget.cpp.o -MF CMakeFiles/racer.dir/gamewidget.cpp.o.d -o CMakeFiles/racer.dir/gamewidget.cpp.o -c /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/gamewidget.cpp
 
 CMakeFiles/racer.dir/gamewidget.cpp.i: cmake_force
@@ -288,7 +302,7 @@ CMakeFiles/racer.dir/gamewidget.cpp.s: cmake_force
 CMakeFiles/racer.dir/tests.cpp.o: CMakeFiles/racer.dir/flags.make
 CMakeFiles/racer.dir/tests.cpp.o: /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/tests.cpp
 CMakeFiles/racer.dir/tests.cpp.o: CMakeFiles/racer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_17) "Building CXX object CMakeFiles/racer.dir/tests.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_18) "Building CXX object CMakeFiles/racer.dir/tests.cpp.o"
 	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/racer.dir/tests.cpp.o -MF CMakeFiles/racer.dir/tests.cpp.o.d -o CMakeFiles/racer.dir/tests.cpp.o -c /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/tests.cpp
 
 CMakeFiles/racer.dir/tests.cpp.i: cmake_force
@@ -302,7 +316,7 @@ CMakeFiles/racer.dir/tests.cpp.s: cmake_force
 CMakeFiles/racer.dir/main.cpp.o: CMakeFiles/racer.dir/flags.make
 CMakeFiles/racer.dir/main.cpp.o: /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/main.cpp
 CMakeFiles/racer.dir/main.cpp.o: CMakeFiles/racer.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_18) "Building CXX object CMakeFiles/racer.dir/main.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_19) "Building CXX object CMakeFiles/racer.dir/main.cpp.o"
 	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/racer.dir/main.cpp.o -MF CMakeFiles/racer.dir/main.cpp.o.d -o CMakeFiles/racer.dir/main.cpp.o -c /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/main.cpp
 
 CMakeFiles/racer.dir/main.cpp.i: cmake_force
@@ -328,6 +342,7 @@ racer_OBJECTS = \
 "CMakeFiles/racer.dir/audio.cpp.o" \
 "CMakeFiles/racer.dir/jobs.cpp.o" \
 "CMakeFiles/racer.dir/highscores.cpp.o" \
+"CMakeFiles/racer.dir/raster3d.cpp.o" \
 "CMakeFiles/racer.dir/game.cpp.o" \
 "CMakeFiles/racer.dir/gamewidget.cpp.o" \
 "CMakeFiles/racer.dir/tests.cpp.o" \
@@ -349,6 +364,7 @@ racer: CMakeFiles/racer.dir/collision.cpp.o
 racer: CMakeFiles/racer.dir/audio.cpp.o
 racer: CMakeFiles/racer.dir/jobs.cpp.o
 racer: CMakeFiles/racer.dir/highscores.cpp.o
+racer: CMakeFiles/racer.dir/raster3d.cpp.o
 racer: CMakeFiles/racer.dir/game.cpp.o
 racer: CMakeFiles/racer.dir/gamewidget.cpp.o
 racer: CMakeFiles/racer.dir/tests.cpp.o
@@ -360,7 +376,7 @@ racer: /Users/sayanadityadas/Qt/6.12.0/macos/lib/QtGui.framework/Versions/A/QtGu
 racer: /Users/sayanadityadas/Qt/6.12.0/macos/lib/QtNetwork.framework/Versions/A/QtNetwork
 racer: /Users/sayanadityadas/Qt/6.12.0/macos/lib/QtCore.framework/Versions/A/QtCore
 racer: CMakeFiles/racer.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_19) "Linking CXX executable racer"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_20) "Linking CXX executable racer"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/racer.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

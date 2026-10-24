@@ -502,6 +502,12 @@
 			null
 		],
 		[
+			"/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/raster3d.h",
+			"Mu",
+			"EWIEGA46WW/moc_raster3d.cpp",
+			null
+		],
+		[
 			"/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/roadrender.h",
 			"Mu",
 			"EWIEGA46WW/moc_roadrender.cpp",
@@ -645,6 +651,11 @@
 		],
 		[
 			"/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/main.cpp",
+			"Mu",
+			null
+		],
+		[
+			"/Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/raster3d.cpp",
 			"Mu",
 			null
 		],

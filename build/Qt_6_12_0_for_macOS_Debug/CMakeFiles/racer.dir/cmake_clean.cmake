@@ -22,6 +22,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/racer.dir/main.cpp.o.d"
   "CMakeFiles/racer.dir/racer_autogen/mocs_compilation.cpp.o"
   "CMakeFiles/racer.dir/racer_autogen/mocs_compilation.cpp.o.d"
+  "CMakeFiles/racer.dir/raster3d.cpp.o"
+  "CMakeFiles/racer.dir/raster3d.cpp.o.d"
   "CMakeFiles/racer.dir/roadrender.cpp.o"
   "CMakeFiles/racer.dir/roadrender.cpp.o.d"
   "CMakeFiles/racer.dir/spanfill_avx2.cpp.o"

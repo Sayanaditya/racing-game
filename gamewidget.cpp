@@ -290,6 +290,9 @@ void GameWidget::keyPressEvent(QKeyEvent* e) {
         case Qt::Key_H:
             game_.fieldRepair();
             return;
+        case Qt::Key_E:
+            game_.toggle3DPipeline();
+            return;
         case Qt::Key_Q:
             game_.toggleGapGuide();
             return;

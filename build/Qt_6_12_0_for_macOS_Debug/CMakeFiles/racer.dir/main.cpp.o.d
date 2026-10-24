@@ -1271,6 +1271,7 @@ CMakeFiles/racer.dir/main.cpp.o: \
   /Library/Developer/CommandLineTools/SDKs/MacOSX27.0.sdk/usr/include/c++/v1/__stop_token/intrusive_list_view.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX27.0.sdk/usr/include/c++/v1/__stop_token/stop_token.h \
   /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/highscores.h \
+  /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/raster3d.h \
   /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/audio.h \
   /Users/sayanadityadas/Qt/6.12.0/macos/include/QtCore/QIODevice \
   /Users/sayanadityadas/Qt/6.12.0/macos/lib/QtCore.framework/Headers/qiodevice.h \

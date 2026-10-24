@@ -1220,4 +1220,5 @@ CMakeFiles/racer.dir/tests.cpp.o: \
   /Library/Developer/CommandLineTools/SDKs/MacOSX27.0.sdk/usr/include/c++/v1/__stop_token/intrusive_list_view.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX27.0.sdk/usr/include/c++/v1/__stop_token/stop_token.h \
   /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/highscores.h \
-  /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/game.h
+  /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/game.h \
+  /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/raster3d.h

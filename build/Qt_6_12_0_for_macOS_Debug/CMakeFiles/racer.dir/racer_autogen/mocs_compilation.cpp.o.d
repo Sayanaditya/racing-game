@@ -1223,6 +1223,7 @@ CMakeFiles/racer.dir/racer_autogen/mocs_compilation.cpp.o: \
   /Library/Developer/CommandLineTools/SDKs/MacOSX27.0.sdk/usr/include/c++/v1/__stop_token/intrusive_list_view.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX27.0.sdk/usr/include/c++/v1/__stop_token/stop_token.h \
   /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/racer_autogen/EWIEGA46WW/../../../../highscores.h \
+  /Users/sayanadityadas/academics/labs/cg/argon-built-racing-game/build/Qt_6_12_0_for_macOS_Debug/racer_autogen/EWIEGA46WW/../../../../raster3d.h \
   /Users/sayanadityadas/Qt/6.12.0/macos/include/QtWidgets/QWidget \
   /Users/sayanadityadas/Qt/6.12.0/macos/lib/QtWidgets.framework/Headers/qwidget.h \
   /Users/sayanadityadas/Qt/6.12.0/macos/lib/QtWidgets.framework/Headers/qtwidgetsglobal.h \

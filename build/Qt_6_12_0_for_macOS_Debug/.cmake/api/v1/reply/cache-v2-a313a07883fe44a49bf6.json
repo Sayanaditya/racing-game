@@ -1119,7 +1119,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "1.0.0"
+			"value" : "3.0.0"
 		},
 		{
 			"name" : "CMAKE_PROJECT_VERSION_MAJOR",
@@ -1131,7 +1131,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "1"
+			"value" : "3"
 		},
 		{
 			"name" : "CMAKE_PROJECT_VERSION_MINOR",
@@ -7767,7 +7767,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "/usr/local"
+			"value" : "/tmp"
 		}
 	],
 	"kind" : "cache",

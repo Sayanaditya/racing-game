@@ -395,6 +395,30 @@ racer_autogen/mocs_compilation.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/racer.dir/build.make CMakeFiles/racer.dir/racer_autogen/mocs_compilation.cpp.s
 .PHONY : racer_autogen/mocs_compilation.cpp.s
 
+raster3d.o: raster3d.cpp.o
+.PHONY : raster3d.o
+
+# target to build an object file
+raster3d.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/racer.dir/build.make CMakeFiles/racer.dir/raster3d.cpp.o
+.PHONY : raster3d.cpp.o
+
+raster3d.i: raster3d.cpp.i
+.PHONY : raster3d.i
+
+# target to preprocess a source file
+raster3d.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/racer.dir/build.make CMakeFiles/racer.dir/raster3d.cpp.i
+.PHONY : raster3d.cpp.i
+
+raster3d.s: raster3d.cpp.s
+.PHONY : raster3d.s
+
+# target to generate assembly for a file
+raster3d.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/racer.dir/build.make CMakeFiles/racer.dir/raster3d.cpp.s
+.PHONY : raster3d.cpp.s
+
 roadrender.o: roadrender.cpp.o
 .PHONY : roadrender.o
 
@@ -604,6 +628,9 @@ help:
 	@echo "... racer_autogen/mocs_compilation.o"
 	@echo "... racer_autogen/mocs_compilation.i"
 	@echo "... racer_autogen/mocs_compilation.s"
+	@echo "... raster3d.o"
+	@echo "... raster3d.i"
+	@echo "... raster3d.s"
 	@echo "... roadrender.o"
 	@echo "... roadrender.i"
 	@echo "... roadrender.s"
